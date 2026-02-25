@@ -273,21 +273,9 @@ jobs:
   build-ios:
     name: "Build: iOS"
     runs-on: macos-latest
-    needs: [dawn-apple-ios]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download Dawn (Apple xcframework)
-        uses: actions/download-artifact@v4
-        with:
-          name: dawn-apple-ios
-          path: dawn-install
-
-      - name: Set Dawn env for ort
-        run: |
-          echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
-          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
