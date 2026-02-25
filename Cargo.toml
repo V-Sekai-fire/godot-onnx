@@ -16,8 +16,12 @@ ndarray = "0.17"
 [target.'cfg(target_os = "macos")'.dependencies]
 ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu", "coreml"] }
 
-# Android: CPU only (no WebGPU/Dawn prebuilts on pyke CDN; use build-dawn job to build Dawn if needed)
+# Android (incl. Meta Quest 3): NNAPI for GPU/NPU acceleration, CPU fallback
 [target.'cfg(target_os = "android")'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "nnapi"] }
+
+# iOS: CPU only (no WebGPU prebuilt for iOS; use minimal ort for CI/build)
+[target.'cfg(target_os = "ios")'.dependencies]
 ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
 
 # Web (wasm32): use ort-web backend instead of native ONNX Runtime
