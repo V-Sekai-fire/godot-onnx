@@ -8,29 +8,20 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 godot = { git = "https://github.com/godot-rust/gdext.git", features = ["experimental-threads", "register-docs"] }
-# Default: CPU only (no webgpu; Linux/Windows add webgpu via target-specific deps)
-ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
+# webgpu = cross-platform GPU; coreml only on macOS (target-specific) to avoid Linux/Windows link issues in CI
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
 ndarray = "0.17"
 
-# Linux/Windows: WebGPU for GPU
-[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
-
-# macOS: CoreML for GPU (no WebGPU)
+# macOS: add CoreML execution provider
 [target.'cfg(target_os = "macos")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu", "coreml"] }
 
-# Android (incl. Meta Quest 3): NNAPI for GPU/NPU acceleration, CPU fallback
+# Android: CPU only (no WebGPU/Dawn prebuilts on pyke CDN; use build-dawn job to build Dawn if needed)
 [target.'cfg(target_os = "android")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "nnapi"] }
+ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
 
-# iOS: CoreML for GPU, same as macOS
-[target.'cfg(target_os = "ios")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
-
-# Web (wasm32): godot experimental-wasm (api-custom); ort-web backend (default-features = false to avoid enabling both api-4-5 and api-custom)
+# Web (wasm32): use ort-web backend instead of native ONNX Runtime
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-godot = { git = "https://github.com/godot-rust/gdext.git", default-features = false, features = ["experimental-wasm-nothreads", "lazy-function-tables"] }
 ort = { version = "2.0.0-rc.11", default-features = false, features = ["ndarray", "alternative-backend"] }
 ort-web = "0.1"
 wasm-bindgen-futures = "0.4"

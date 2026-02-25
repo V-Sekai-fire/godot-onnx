@@ -14,7 +14,7 @@ env:
 jobs:
   # --- Install Dawn from release (all ort/ort-web platforms) ---
   dawn-linux:
-    name: "Dawn: Linux"
+    name: Dawn: Linux
     runs-on: ubuntu-latest
     steps:
       - name: Download Dawn (ubuntu-latest Release)
@@ -33,7 +33,7 @@ jobs:
           path: dawn-install/
 
   dawn-windows:
-    name: "Dawn: Windows"
+    name: Dawn: Windows
     runs-on: windows-latest
     steps:
       - name: Download Dawn (windows-latest Release)
@@ -52,7 +52,7 @@ jobs:
           path: dawn-install/
 
   dawn-macos:
-    name: "Dawn: macOS"
+    name: Dawn: macOS
     runs-on: macos-latest
     steps:
       - name: Download Dawn (macos-latest Release)
@@ -71,7 +71,7 @@ jobs:
           path: dawn-install/
 
   dawn-android:
-    name: "Dawn: Android"
+    name: Dawn: Android
     runs-on: ubuntu-latest
     steps:
       - name: Download Dawn (Android)
@@ -90,7 +90,7 @@ jobs:
           path: dawn-install/
 
   dawn-apple-ios:
-    name: "Dawn: iOS"
+    name: Dawn: iOS
     runs-on: ubuntu-latest
     steps:
       - name: Download Dawn (Apple xcframework)
@@ -109,7 +109,7 @@ jobs:
           path: dawn-install/
 
   dawn-web:
-    name: "Dawn: Web"
+    name: Dawn: Web
     runs-on: ubuntu-latest
     steps:
       - name: Download emdawnwebgpu package
@@ -126,23 +126,47 @@ jobs:
           name: dawn-web
           path: dawn-install/
 
-  # --- Desktop: test, build, per-OS artifact + merged artifact ---
+  # --- Desktop: test, build, per-OS artifact + merged artifact (uses Dawn for ort WebGPU) ---
   build-and-test:
-    name: "Build: Desktop (${{ matrix.artifact_name }})"
+    name: Build: Desktop (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: [dawn-linux, dawn-windows, dawn-macos]
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            artifact_name: Linux
-          - os: windows-latest
-            artifact_name: Windows
-          - os: macos-latest
-            artifact_name: macOS
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set Dawn artifact name
+        id: dawn
+        shell: bash
+        run: |
+          case "${{ matrix.os }}" in
+            ubuntu-latest) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
+            windows-latest) echo "name=dawn-windows-x64" >> $GITHUB_OUTPUT ;;
+            macos-latest) echo "name=dawn-macos-x64" >> $GITHUB_OUTPUT ;;
+            *) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Download Dawn
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.dawn.outputs.name }}
+          path: dawn-install
+
+      - name: Set Dawn env for ort
+        run: |
+          echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+        if: runner.os != 'Windows'
+
+      - name: Set Dawn env for ort (Windows)
+        run: |
+          echo "DAWN_ROOT=$env:GITHUB_WORKSPACE\dawn-install" >> $env:GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=$env:GITHUB_WORKSPACE\dawn-install" >> $env:GITHUB_ENV
+        if: runner.os == 'Windows'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -199,12 +223,12 @@ jobs:
       - name: Upload sample project (with extension)
         uses: actions/upload-artifact@v4
         with:
-          name: godot-onnx-sample-${{ matrix.artifact_name }}
+          name: godot-onnx-sample-${{ matrix.os }}
           path: sample/
           if-no-files-found: error
 
   merge-sample:
-    name: "Merge: sample"
+    name: Merge: sample
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
@@ -241,13 +265,25 @@ jobs:
           path: merged/sample/
           if-no-files-found: error
 
-  # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target) ---
+  # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target); use Dawn artifacts for ort/ort-web ---
   build-web:
-    name: "Build: Web"
+    name: Build: Web
     runs-on: ubuntu-latest
+    needs: [dawn-web]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download Dawn (emdawnwebgpu for ort-web)
+        uses: actions/download-artifact@v4
+        with:
+          name: dawn-web
+          path: dawn-install
+
+      - name: Set Dawn env for ort-web
+        run: |
+          echo "EMDAWNWEBGPU_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -278,11 +314,23 @@ jobs:
           path: sample/
 
   build-android:
-    name: "Build: Android"
+    name: Build: Android
     runs-on: ubuntu-latest
+    needs: [dawn-android]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download Dawn (Android)
+        uses: actions/download-artifact@v4
+        with:
+          name: dawn-android
+          path: dawn-install
+
+      - name: Set Dawn env for ort
+        run: |
+          echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -293,29 +341,18 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
       - name: Setup Android NDK
-        id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
       - name: Build Android (arm64-v8a)
         run: cargo build --release --target aarch64-linux-android
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Build Android (armeabi-v7a)
         run: cargo build --release --target armv7-linux-androideabi
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Build Android (x86_64)
         run: cargo build --release --target x86_64-linux-android
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Build Android (x86)
         run: cargo build --release --target i686-linux-android
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Prepare artifact
         run: |
           mkdir -p sample/addons/godot-onnx
@@ -332,17 +369,29 @@ jobs:
           path: sample/
 
   build-ios:
-    name: "Build: iOS"
+    name: Build: iOS
     runs-on: macos-latest
+    needs: [dawn-apple-ios]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download Dawn (Apple xcframework)
+        uses: actions/download-artifact@v4
+        with:
+          name: dawn-apple-ios
+          path: dawn-install
+
+      - name: Set Dawn env for ort
+        run: |
+          echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -351,11 +400,14 @@ jobs:
         run: cargo build --release --target aarch64-apple-ios
       - name: Build iOS (simulator arm64)
         run: cargo build --release --target aarch64-apple-ios-sim
+      - name: Build iOS (simulator x86_64)
+        run: cargo build --release --target x86_64-apple-ios
       - name: Prepare artifact
         run: |
           mkdir -p sample/addons/godot-onnx
           cp target/aarch64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.arm64.dylib 2>/dev/null || true
           cp target/aarch64-apple-ios-sim/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.sim.arm64.dylib 2>/dev/null || true
+          cp target/x86_64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.sim.x86_64.dylib 2>/dev/null || true
           ls -la sample/addons/godot-onnx/
       - name: Upload iOS artifact
         if: success()

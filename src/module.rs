@@ -29,7 +29,7 @@ impl Default for SessionStore {
     }
 }
 
-/// Build session with platform-appropriate execution providers: CoreML on macOS/iOS; WebGPU on Linux/Windows; NNAPI (GPU/NPU) + CPU on Android/Quest 3.
+/// Build session with platform-appropriate execution providers: CoreML on macOS; WebGPU on Linux/Windows; CPU only on Android (Dawn built separately if needed).
 fn session_builder() -> ort::Result<SessionBuilder> {
     #[cfg(target_os = "macos")]
     {
@@ -41,10 +41,9 @@ fn session_builder() -> ort::Result<SessionBuilder> {
 
     #[cfg(target_os = "android")]
     {
-        let nnapi_ep: ExecutionProviderDispatch = ep::nnapi::NNAPI::default().into();
         let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
         Session::builder()
-            .and_then(|b: SessionBuilder| b.with_execution_providers([nnapi_ep, cpu_ep]))
+            .and_then(|b: SessionBuilder| b.with_execution_providers([cpu_ep]))
     }
 
     #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -55,15 +54,7 @@ fn session_builder() -> ort::Result<SessionBuilder> {
             .and_then(|b: SessionBuilder| b.with_execution_providers([webgpu_ep, cpu_ep]))
     }
 
-    #[cfg(target_os = "ios")]
-    {
-        let coreml_ep: ExecutionProviderDispatch = ep::CoreML::default().into();
-        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
-        Session::builder()
-            .and_then(|b: SessionBuilder| b.with_execution_providers([coreml_ep, cpu_ep]))
-    }
-
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "android")))]
     {
         let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
         Session::builder()
@@ -127,6 +118,7 @@ impl OnnxModule {
             let path_clone = path.clone();
             let bytes_vec: Vec<u8> = bytes.as_slice().to_vec();
             let session_store = self.session.clone();
+            let path_for_emit = path.clone();
             spawn_local(async move {
                 let api = match ort_web::api(ort_web::FEATURE_WEBGPU).await {
                     Ok(a) => a,
