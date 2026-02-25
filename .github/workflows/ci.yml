@@ -156,11 +156,11 @@ jobs:
           name: ${{ steps.dawn.outputs.name }}
           path: dawn-install
 
-      - name: Set Dawn env for ort
+      - name: Set Dawn env for ort (Linux only; macOS uses ort prebuilt with CoreML)
         run: |
           echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
           echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
-        if: runner.os != 'Windows'
+        if: runner.os == 'Linux'
 
       - name: Set Dawn env for ort (Windows)
         run: |
