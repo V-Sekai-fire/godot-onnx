@@ -7,14 +7,14 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-godot = { git = "https://github.com/godot-rust/gdext.git", features = ["api-4-5", "experimental-threads", "register-docs"] }
+godot = { git = "https://github.com/godot-rust/gdext.git", features = ["experimental-threads", "register-docs"] }
 ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
 ndarray = "0.17"
 
 [features]
-default = []
-# Build for Godot compiled with precision=double (64-bit real). Use with: cargo build --release --features double-precision
-double-precision = ["godot/double-precision"]
+default = ["godot/api-4-5"]
+# Build for Godot compiled with precision=double. Requires GODOT4_BIN pointing to that binary. Use: cargo build --release --no-default-features --features double-precision
+double-precision = ["godot/api-custom", "godot/double-precision"]
 
 [dev-dependencies]
 proptest = "1.5"

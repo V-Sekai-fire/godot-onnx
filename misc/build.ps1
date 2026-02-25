@@ -22,21 +22,25 @@ if (Test-Path $targetPath) {
     exit 1
 }
 
-# Doubles build (for Godot with precision=double). Requires api-custom or api-custom-json in gdext; skip if not set up.
-Write-Host "Building Godot ONNX GDExtension (doubles)..."
-$errPreference = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-& cargo build --release --features double-precision 2>&1 | Out-Host
-$dc = $LASTEXITCODE
-$ErrorActionPreference = $errPreference
-if ($dc -eq 0) {
-    $tp = "target\release\lib$libName.$ext"
-    if (-not (Test-Path $tp)) { $tp = "target\release\$libName.$ext" }
-    if (Test-Path $tp) {
-        Copy-Item $tp -Destination "$destDir\lib${libName}_doubles.$ext" -Force
-        Write-Host "Copied to $destDir\lib${libName}_doubles.$ext"
+# Doubles build (for Godot with precision=double). Requires GODOT4_BIN set to a Godot binary built with precision=double.
+if ($env:GODOT4_BIN) {
+    Write-Host "Building Godot ONNX GDExtension (doubles)... GODOT4_BIN=$env:GODOT4_BIN"
+    $errPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & cargo build --release --no-default-features --features double-precision 2>&1 | Out-Host
+    $dc = $LASTEXITCODE
+    $ErrorActionPreference = $errPreference
+    if ($dc -eq 0) {
+        $tp = "target\release\lib$libName.$ext"
+        if (-not (Test-Path $tp)) { $tp = "target\release\$libName.$ext" }
+        if (Test-Path $tp) {
+            Copy-Item $tp -Destination "$destDir\lib${libName}_doubles.$ext" -Force
+            Write-Host "Copied to $destDir\lib${libName}_doubles.$ext"
+        }
+    } else {
+        Write-Warning "Doubles build failed. Float build is ready."
     }
 } else {
-    Write-Warning "Doubles build skipped (needs GODOT4_BIN or GODOT4_GDEXTENSION_JSON for gdext api-custom/api-custom-json). Float build is ready."
+    Write-Host "Doubles build skipped (set GODOT4_BIN to a double-precision Godot binary to build)."
 }
 exit 0

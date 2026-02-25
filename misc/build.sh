@@ -32,19 +32,23 @@ else
     exit 1
 fi
 
-# Doubles build (for Godot with precision=double). Requires api-custom or api-custom-json; skip if not set up.
-echo "Building Godot ONNX GDExtension (doubles)..."
+# Doubles build (for Godot with precision=double). Requires GODOT4_BIN set to a Godot binary built with precision=double.
 LIB_NAME_DOUBLES="libgodot_onnx_doubles.$LIB_EXT"
-if cargo build --release --features double-precision 2>/dev/null; then
-    if [ -f "target/release/$LIB_NAME" ]; then
-        cp "target/release/$LIB_NAME" "sample/addons/godot-onnx/$LIB_NAME_DOUBLES"
-    elif [ -f "target/release/godot_onnx.$LIB_EXT" ]; then
-        cp "target/release/godot_onnx.$LIB_EXT" "sample/addons/godot-onnx/$LIB_NAME_DOUBLES"
-    fi
-    if [ -f "sample/addons/godot-onnx/$LIB_NAME_DOUBLES" ]; then
-        [ "$LIB_EXT" = "dylib" ] && codesign --force --sign - "sample/addons/godot-onnx/$LIB_NAME_DOUBLES"
-        echo "Copied to sample/addons/godot-onnx/$LIB_NAME_DOUBLES"
+if [ -n "$GODOT4_BIN" ]; then
+    echo "Building Godot ONNX GDExtension (doubles)... GODOT4_BIN=$GODOT4_BIN"
+    if cargo build --release --no-default-features --features double-precision; then
+        if [ -f "target/release/$LIB_NAME" ]; then
+            cp "target/release/$LIB_NAME" "sample/addons/godot-onnx/$LIB_NAME_DOUBLES"
+        elif [ -f "target/release/godot_onnx.$LIB_EXT" ]; then
+            cp "target/release/godot_onnx.$LIB_EXT" "sample/addons/godot-onnx/$LIB_NAME_DOUBLES"
+        fi
+        if [ -f "sample/addons/godot-onnx/$LIB_NAME_DOUBLES" ]; then
+            [ "$LIB_EXT" = "dylib" ] && codesign --force --sign - "sample/addons/godot-onnx/$LIB_NAME_DOUBLES"
+            echo "Copied to sample/addons/godot-onnx/$LIB_NAME_DOUBLES"
+        fi
+    else
+        echo "Warning: Doubles build failed. Float build is ready."
     fi
 else
-    echo "Warning: Doubles build skipped (needs GODOT4_BIN or GODOT4_GDEXTENSION_JSON for gdext). Float build is ready."
+    echo "Doubles build skipped (set GODOT4_BIN to a double-precision Godot binary to build)."
 fi

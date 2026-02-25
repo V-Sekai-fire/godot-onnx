@@ -43,8 +43,30 @@ jobs:
       - name: Run tests
         run: cargo test
 
-      - name: Build release (float)
+      - name: Build release
         run: cargo build --release
 
-      - name: Build release (doubles)
-        run: cargo build --release --features double-precision
+      - name: Put extension in sample project
+        shell: bash
+        run: |
+          mkdir -p sample/addons/godot-onnx
+          case "$RUNNER_OS" in
+            Windows)
+              if [ -f target/release/godot_onnx.dll ]; then cp target/release/godot_onnx.dll sample/addons/godot-onnx/libgodot_onnx.dll; fi
+              if [ -f target/release/libgodot_onnx.dll ]; then cp target/release/libgodot_onnx.dll sample/addons/godot-onnx/libgodot_onnx.dll; fi
+              ;;
+            Linux)
+              cp target/release/libgodot_onnx.so sample/addons/godot-onnx/ 2>/dev/null || true
+              ;;
+            macOS)
+              cp target/release/libgodot_onnx.dylib sample/addons/godot-onnx/ 2>/dev/null || true
+              ;;
+          esac
+          ls -la sample/addons/godot-onnx/
+
+      - name: Upload sample project (with extension)
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample-${{ matrix.os }}
+          path: sample/
+          if-no-files-found: error
