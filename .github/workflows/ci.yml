@@ -12,7 +12,7 @@ env:
   DAWN_COMMIT: 536c572abab2602db0b652eda401ebd01e046c11
 
 jobs:
-  # --- Install Dawn from release (all ort/ort-web platforms) ---
+  # --- Install Dawn for desktop Linux/Windows (ort WebGPU EP) ---
   dawn-linux:
     name: "Dawn: Linux"
     runs-on: ubuntu-latest
@@ -51,86 +51,11 @@ jobs:
           name: dawn-windows-x64
           path: dawn-install/
 
-  dawn-macos:
-    name: "Dawn: macOS"
-    runs-on: macos-latest
-    steps:
-      - name: Download Dawn (macos-latest Release)
-        run: |
-          ASSET="Dawn-${{ env.DAWN_COMMIT }}-macos-latest-Release.tar.gz"
-          curl -sL -o dawn.tar.gz "https://github.com/google/dawn/releases/download/${{ env.DAWN_RELEASE_TAG }}/${ASSET}"
-      - name: Install Dawn
-        run: |
-          mkdir -p dawn-install
-          tar -xzf dawn.tar.gz -C dawn-install
-          ls -laR dawn-install/
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dawn-macos-x64
-          path: dawn-install/
-
-  dawn-android:
-    name: "Dawn: Android"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Dawn (Android)
-        run: |
-          ASSET="dawn-android-${{ env.DAWN_COMMIT }}.tar.gz"
-          curl -sL -o dawn.tar.gz "https://github.com/google/dawn/releases/download/${{ env.DAWN_RELEASE_TAG }}/${ASSET}"
-      - name: Install Dawn
-        run: |
-          mkdir -p dawn-install
-          tar -xzf dawn.tar.gz -C dawn-install
-          ls -laR dawn-install/
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dawn-android
-          path: dawn-install/
-
-  dawn-apple-ios:
-    name: "Dawn: iOS"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Dawn (Apple xcframework)
-        run: |
-          ASSET="dawn-apple-${{ env.DAWN_COMMIT }}.xcframework.tar.gz"
-          curl -sL -o dawn.tar.gz "https://github.com/google/dawn/releases/download/${{ env.DAWN_RELEASE_TAG }}/${ASSET}"
-      - name: Install Dawn
-        run: |
-          mkdir -p dawn-install
-          tar -xzf dawn.tar.gz -C dawn-install
-          ls -laR dawn-install/
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dawn-apple-ios
-          path: dawn-install/
-
-  dawn-web:
-    name: "Dawn: Web"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download emdawnwebgpu package
-        run: |
-          curl -sL -o emdawnwebgpu.zip "https://github.com/google/dawn/releases/download/${{ env.DAWN_RELEASE_TAG }}/emdawnwebgpu_pkg-${{ env.DAWN_RELEASE_TAG }}.zip"
-      - name: Install Dawn (web)
-        run: |
-          mkdir -p dawn-install
-          unzip -q emdawnwebgpu.zip -d dawn-install
-          ls -laR dawn-install/
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dawn-web
-          path: dawn-install/
-
-  # --- Desktop: test, build, per-OS artifact + merged artifact (uses Dawn for ort WebGPU) ---
+  # --- Desktop: test, build, per-OS artifact + merged artifact (Dawn only for Linux/Windows ort WebGPU) ---
   build-and-test:
     name: "Build: Desktop (${{ matrix.os }})"
     runs-on: ${{ matrix.os }}
-    needs: [dawn-linux, dawn-windows, dawn-macos]
+    needs: [dawn-linux, dawn-windows]
     strategy:
       fail-fast: false
       matrix:
@@ -141,32 +66,33 @@ jobs:
 
       - name: Set Dawn artifact name
         id: dawn
+        if: matrix.os != 'macos-latest'
         shell: bash
         run: |
           case "${{ matrix.os }}" in
             ubuntu-latest) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
             windows-latest) echo "name=dawn-windows-x64" >> $GITHUB_OUTPUT ;;
-            macos-latest) echo "name=dawn-macos-x64" >> $GITHUB_OUTPUT ;;
             *) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
           esac
 
       - name: Download Dawn
+        if: matrix.os != 'macos-latest'
         uses: actions/download-artifact@v4
         with:
           name: ${{ steps.dawn.outputs.name }}
           path: dawn-install
 
       - name: Set Dawn env for ort
+        if: matrix.os != 'macos-latest' && runner.os != 'Windows'
         run: |
           echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
           echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
-        if: runner.os != 'Windows'
 
       - name: Set Dawn env for ort (Windows)
+        if: matrix.os == 'windows-latest'
         run: |
           echo "DAWN_ROOT=$env:GITHUB_WORKSPACE\dawn-install" >> $env:GITHUB_ENV
           echo "CMAKE_PREFIX_PATH=$env:GITHUB_WORKSPACE\dawn-install" >> $env:GITHUB_ENV
-        if: runner.os == 'Windows'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -265,25 +191,13 @@ jobs:
           path: merged/sample/
           if-no-files-found: error
 
-  # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target); use Dawn artifacts for ort/ort-web ---
+  # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target) ---
   build-web:
     name: "Build: Web"
     runs-on: ubuntu-latest
-    needs: [dawn-web]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download Dawn (emdawnwebgpu for ort-web)
-        uses: actions/download-artifact@v4
-        with:
-          name: dawn-web
-          path: dawn-install
-
-      - name: Set Dawn env for ort-web
-        run: |
-          echo "EMDAWNWEBGPU_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
-          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -316,21 +230,9 @@ jobs:
   build-android:
     name: "Build: Android"
     runs-on: ubuntu-latest
-    needs: [dawn-android]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download Dawn (Android)
-        uses: actions/download-artifact@v4
-        with:
-          name: dawn-android
-          path: dawn-install
-
-      - name: Set Dawn env for ort
-        run: |
-          echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
-          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
