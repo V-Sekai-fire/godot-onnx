@@ -57,7 +57,7 @@
     (def dest-abs (string cwd "/" dest))
     (def mode (case (os/which)
       :windows (string "copy /Y \"" (string/replace-all "/" "\\" src-abs) "\" \"" (string/replace-all "/" "\\" dest-abs) "\"")
-      true (string "cp " src " " dest)))
+      true (string "cp \"" src-abs "\" \"" dest-abs "\"")))
     (def ret (os/shell mode))
     (when (not= ret 0)
       (eprintf "copy failed: %q -> %q (exit %q)\n" src dest ret)
@@ -67,9 +67,10 @@
 
 (defn main []
   (do
-    (set build-opts (parse-args (tuple/slice (dyn :args) 1)))
+    (def raw-args (dyn :args))
+    (set build-opts (parse-args (if raw-args (tuple/slice raw-args 1) (tuple))))
     (set build-plat (os/which))
-    (set build-ext (case build-plat :windows "dll" :macos "dylib" true "so"))
+    (set build-ext (or (case build-plat :windows "dll" :macos "dylib" :linux "so") "so"))
     (set build-lib-so (string "lib" lib-name "." build-ext))
     (set build-target-dir (string "target/release"))
     (set build-src-path (string build-target-dir "/" build-lib-so))

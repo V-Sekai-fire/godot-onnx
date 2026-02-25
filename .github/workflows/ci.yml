@@ -60,11 +60,15 @@ jobs:
 
       - name: Run tests, build, and put extension in sample
         run: |
+          set -e
           if [ "$RUNNER_OS" = "Windows" ]; then
-            "$USERPROFILE/scoop/shims/janet.exe" misc/build.janet --ci
+            JANET="$USERPROFILE/scoop/shims/janet.exe"
           else
-            janet misc/build.janet --ci
+            JANET=janet
           fi
+          echo "Janet: $($JANET -v 2>/dev/null || true)"
+          echo "Cargo: $(cargo -V)"
+          $JANET misc/build.janet --ci
         shell: bash
 
       - name: Upload sample project (with extension)
