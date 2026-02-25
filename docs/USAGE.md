@@ -29,6 +29,8 @@ if result.size() > 0:
 
 Inputs to `call_module` must be `OnnxTensor` instances; pass them in the same order as the model’s inputs. Outputs are returned as an array of `OnnxTensor`.
 
+**Backends:** The extension uses ONNX Runtime's WebGPU execution provider on all platforms.
+
 ## Test models (identity & matmul)
 
 The sample expects two small ONNX models under `sample/models/`:

@@ -18,6 +18,13 @@ use std::sync::Mutex;
 use crate::model_data::OnnxModelData;
 use crate::tensor::OnnxTensor;
 
+/// Build session with WebGPU execution provider (all platforms).
+fn session_builder() -> ort::Result<SessionBuilder> {
+    let webgpu_ep: ExecutionProviderDispatch = ep::WebGPU::default().into();
+    Session::builder()
+        .and_then(|b: SessionBuilder| b.with_execution_providers([webgpu_ep]))
+}
+
 /// Resource that loads an ONNX model from a Godot path (`res://` or `user://`) and runs inference via ONNX Runtime.
 /// Create with `OnnxModule.new()`, then call [load] to load a model and [call_module] to run inference.
 #[derive(GodotClass)]
@@ -46,10 +53,8 @@ impl OnnxModule {
         if let Ok(mut f) = std::fs::File::create(&temp_path) {
             let _ = f.write_all(bytes_slice);
             drop(f);
-            let webgpu_ep: ExecutionProviderDispatch = ep::WebGPU::default().into();
-            let builder = Session::builder()
-                .and_then(|b: SessionBuilder| b.with_execution_providers([webgpu_ep]));
-            match builder.and_then(|b| b.commit_from_file(&temp_path)) {
+            let builder = session_builder();
+            match builder.and_then(|b: SessionBuilder| b.commit_from_file(&temp_path)) {
                 Ok(session) => {
                     let _ = std::fs::remove_file(&temp_path);
                     *self.path.lock().unwrap() = path;
