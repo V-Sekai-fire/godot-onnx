@@ -8,9 +8,13 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 godot = { git = "https://github.com/godot-rust/gdext.git", features = ["experimental-threads", "register-docs"] }
-# webgpu = cross-platform GPU; coreml only on macOS (target-specific) to avoid Linux/Windows link issues in CI
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
+# Default: CPU only (no webgpu; Linux/Windows add webgpu via target-specific deps)
+ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
 ndarray = "0.17"
+
+# Linux/Windows: WebGPU for GPU
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
 
 # macOS: CoreML for GPU (no WebGPU)
 [target.'cfg(target_os = "macos")'.dependencies]
