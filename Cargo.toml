@@ -8,8 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 godot = { git = "https://github.com/godot-rust/gdext.git", features = ["experimental-threads", "register-docs"] }
-# webgpu = cross-platform GPU; coreml only on macOS (target-specific) to avoid Linux/Windows link issues in CI
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
+ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
 ndarray = "0.17"
 
 # macOS: add CoreML execution provider
