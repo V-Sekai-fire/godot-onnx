@@ -293,18 +293,29 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: .
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
       - name: Setup Android NDK
+        id: setup-ndk
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
       - name: Build Android (arm64-v8a)
         run: cargo build --release --target aarch64-linux-android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Build Android (armeabi-v7a)
         run: cargo build --release --target armv7-linux-androideabi
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Build Android (x86_64)
         run: cargo build --release --target x86_64-linux-android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Build Android (x86)
         run: cargo build --release --target i686-linux-android
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       - name: Prepare artifact
         run: |
           mkdir -p sample/addons/godot-onnx
