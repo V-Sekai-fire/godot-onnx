@@ -14,7 +14,7 @@ env:
 jobs:
   # --- Install Dawn from release (all ort/ort-web platforms) ---
   dawn-linux:
-    name: Dawn: Linux
+    name: "Dawn: Linux"
     runs-on: ubuntu-latest
     steps:
       - name: Download Dawn (ubuntu-latest Release)
@@ -33,7 +33,7 @@ jobs:
           path: dawn-install/
 
   dawn-windows:
-    name: Dawn: Windows
+    name: "Dawn: Windows"
     runs-on: windows-latest
     steps:
       - name: Download Dawn (windows-latest Release)
@@ -52,7 +52,7 @@ jobs:
           path: dawn-install/
 
   dawn-macos:
-    name: Dawn: macOS
+    name: "Dawn: macOS"
     runs-on: macos-latest
     steps:
       - name: Download Dawn (macos-latest Release)
@@ -71,7 +71,7 @@ jobs:
           path: dawn-install/
 
   dawn-android:
-    name: Dawn: Android
+    name: "Dawn: Android"
     runs-on: ubuntu-latest
     steps:
       - name: Download Dawn (Android)
@@ -90,7 +90,7 @@ jobs:
           path: dawn-install/
 
   dawn-apple-ios:
-    name: Dawn: iOS
+    name: "Dawn: iOS"
     runs-on: ubuntu-latest
     steps:
       - name: Download Dawn (Apple xcframework)
@@ -109,7 +109,7 @@ jobs:
           path: dawn-install/
 
   dawn-web:
-    name: Dawn: Web
+    name: "Dawn: Web"
     runs-on: ubuntu-latest
     steps:
       - name: Download emdawnwebgpu package
@@ -128,7 +128,7 @@ jobs:
 
   # --- Desktop: test, build, per-OS artifact + merged artifact (uses Dawn for ort WebGPU) ---
   build-and-test:
-    name: Build: Desktop (${{ matrix.os }})
+    name: "Build: Desktop (${{ matrix.os }})"
     runs-on: ${{ matrix.os }}
     needs: [dawn-linux, dawn-windows, dawn-macos]
     strategy:
@@ -228,7 +228,7 @@ jobs:
           if-no-files-found: error
 
   merge-sample:
-    name: Merge: sample
+    name: "Merge: sample"
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
@@ -267,7 +267,7 @@ jobs:
 
   # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target); use Dawn artifacts for ort/ort-web ---
   build-web:
-    name: Build: Web
+    name: "Build: Web"
     runs-on: ubuntu-latest
     needs: [dawn-web]
     continue-on-error: true
@@ -314,7 +314,7 @@ jobs:
           path: sample/
 
   build-android:
-    name: Build: Android
+    name: "Build: Android"
     runs-on: ubuntu-latest
     needs: [dawn-android]
     continue-on-error: true
@@ -369,7 +369,7 @@ jobs:
           path: sample/
 
   build-ios:
-    name: Build: iOS
+    name: "Build: iOS"
     runs-on: macos-latest
     needs: [dawn-apple-ios]
     continue-on-error: true
