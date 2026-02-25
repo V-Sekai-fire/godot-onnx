@@ -21,7 +21,7 @@ ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
 
 # Android: CPU only (no WebGPU/Dawn prebuilts on pyke CDN; use build-dawn job to build Dawn if needed)
 [target.'cfg(target_os = "android")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "nnapi"] }
 
 # Web (wasm32): use ort-web backend instead of native ONNX Runtime
 [target.'cfg(target_arch = "wasm32")'.dependencies]
