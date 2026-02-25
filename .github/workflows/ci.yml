@@ -133,7 +133,7 @@ jobs:
         with:
           workspaces: .
       - name: Install Emscripten
-        uses: mymindstorm/setup-emsdk@v15
+        uses: mymindstorm/setup-emsdk@v14
         with:
           version: "latest"
       - name: Build (wasm32)
