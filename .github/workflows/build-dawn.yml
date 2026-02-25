@@ -1,0 +1,49 @@
+# Build Dawn (and webgpu_dawn) for use with ONNX Runtime WebGPU EP.
+# Run manually (workflow_dispatch) or on push to main. Artifact can be used to build
+# ONNX Runtime with WebGPU for targets that lack prebuilt binaries (e.g. Android).
+name: Build Dawn
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/build-dawn.yml'
+
+jobs:
+  build-dawn-linux:
+    name: Build Dawn (Linux)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3 git pkg-config \
+            libxrandr-dev libxinerama-dev libxcursor-dev mesa-common-dev libx11-xcb-dev
+
+      - name: Clone Dawn
+        run: git clone --depth 1 https://github.com/google/dawn.git dawn
+
+      - name: Configure Dawn
+        working-directory: dawn
+        run: |
+          cmake -S . -B out/Release \
+            -DDAWN_FETCH_DEPENDENCIES=ON \
+            -DDAWN_ENABLE_INSTALL=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -G Ninja
+
+      - name: Build Dawn
+        working-directory: dawn
+        run: cmake --build out/Release -j$(nproc)
+
+      - name: Install Dawn
+        working-directory: dawn
+        run: cmake --install out/Release --prefix ${{ github.workspace }}/dawn-install
+
+      - name: Upload Dawn artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dawn-linux-x64
+          path: dawn-install/

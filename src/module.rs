@@ -29,7 +29,7 @@ impl Default for SessionStore {
     }
 }
 
-/// Build session with platform-appropriate execution providers: CoreML on macOS; WebGPU (Vulkan/D3D12/Metal) on Linux and Windows for cross-platform GPU. CPU fallback when accelerator is unavailable (e.g. CI).
+/// Build session with platform-appropriate execution providers: CoreML on macOS; WebGPU on Linux/Windows; CPU only on Android (Dawn built separately if needed).
 fn session_builder() -> ort::Result<SessionBuilder> {
     #[cfg(target_os = "macos")]
     {
@@ -37,6 +37,13 @@ fn session_builder() -> ort::Result<SessionBuilder> {
         let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
         Session::builder()
             .and_then(|b: SessionBuilder| b.with_execution_providers([coreml_ep, cpu_ep]))
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
+        Session::builder()
+            .and_then(|b: SessionBuilder| b.with_execution_providers([cpu_ep]))
     }
 
     #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -47,7 +54,7 @@ fn session_builder() -> ort::Result<SessionBuilder> {
             .and_then(|b: SessionBuilder| b.with_execution_providers([webgpu_ep, cpu_ep]))
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "android")))]
     {
         let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
         Session::builder()
