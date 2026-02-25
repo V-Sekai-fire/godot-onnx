@@ -3,12 +3,10 @@
 # Ensure "Build Tools for Visual Studio" with C++ is installed and that
 # you build from "Developer PowerShell" or a shell where link.exe is in PATH.
 
-# Web (wasm32-unknown-emscripten): side module, no threads (godot-rust export-web)
+# Web (wasm32-unknown-emscripten): side module, no threads (godot-rust export-web).
+# Only stable-compatible flags; -Z options would require nightly.
 [target.wasm32-unknown-emscripten]
 rustflags = [
   "-C", "link-args=-sSIDE_MODULE=2",
   "-C", "llvm-args=-enable-emscripten-cxx-exceptions=0",
-  "-Z", "default-visibility=hidden",
-  "-Z", "link-native-libraries=no",
-  "-Z", "emscripten-wasm-eh=false",
 ]
