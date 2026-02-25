@@ -16,6 +16,10 @@ ndarray = "0.17"
 [target.'cfg(target_os = "macos")'.dependencies]
 ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu", "coreml"] }
 
+# iOS: CoreML only (no WebGPU/Dawn to avoid linking webgpu_dawn)
+[target.'cfg(target_os = "ios")'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
+
 # Android: CPU only (no WebGPU/Dawn prebuilts on pyke CDN; use build-dawn job to build Dawn if needed)
 [target.'cfg(target_os = "android")'.dependencies]
 ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
