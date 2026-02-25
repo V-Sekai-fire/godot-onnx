@@ -141,6 +141,7 @@ jobs:
 
       - name: Set Dawn artifact name
         id: dawn
+        shell: bash
         run: |
           case "${{ matrix.os }}" in
             ubuntu-latest) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
