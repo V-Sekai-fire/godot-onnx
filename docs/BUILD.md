@@ -3,25 +3,19 @@
 ## Requirements
 
 - **Rust** (stable)
+- **[Janet](https://janet-lang.org/)** (build script; install: **Windows** `scoop install janet`, **macOS** `brew install janet`, **Linux** build from source or use your distro's package)
 - **Godot 4.4+**
 - **Windows**: MSVC toolchain (Visual Studio Build Tools with C++ or “Developer Command Prompt”). ort’s prebuilt ONNX Runtime for Windows is MSVC-only; the GNU toolchain is not supported for this crate.
 
 ## Build the extension
 
-From the repo root:
-
-**Windows (PowerShell)**  
-Use a shell where Rust and MSVC are available (e.g. “Developer PowerShell for VS”, or add `%USERPROFILE%\.cargo\bin` to `PATH`):
-
-```powershell
-.\misc\build.ps1
-```
-
-**Linux / macOS**
+From the repo root, use the Janet build script (CI and local use the same script):
 
 ```bash
-./misc/build.sh
+janet misc/build.janet
 ```
+
+Optional flags: `--skip-test`, `--skip-build`, `--skip-doubles`, `--ci`. Wrappers (require Janet on PATH): `.\misc\build.ps1` (Windows), `./misc/build.sh` (Linux/macOS).
 
 The script builds the **float** variant and, if `GODOT4_BIN` is set, the **doubles** variant:
 
@@ -33,7 +27,7 @@ The script builds the **float** variant and, if `GODOT4_BIN` is set, the **doubl
 gdext requires a Godot binary built with **precision=double** to generate the correct API (see [godotengine/godot#86346](https://github.com/godotengine/godot/issues/86346)). You can build Godot from source with `precision=double`, or use a prebuilt double-precision build if available.
 
 1. **Set `GODOT4_BIN`** to the path of your double-precision Godot executable (e.g. `C:\Godot\Godot_v4.x_doubles.exe` or `./godot.double`).
-2. Run the same build script: `.\misc\build.ps1` or `./misc/build.sh`. It will build the float library, then the doubles library using `GODOT4_BIN`.
+2. Run the build script: `janet misc/build.janet`. It will build the float library, then the doubles library using `GODOT4_BIN`.
 3. Or build doubles only:
    ```powershell
    $env:GODOT4_BIN = "C:\path\to\godot_double.exe"
@@ -49,3 +43,13 @@ Open the `sample/` folder as a Godot project (Godot 4.4+) and run the main scene
 
 - **Float only:** `cargo build --release` then copy the library into `sample/addons/godot-onnx/` as `libgodot_onnx.*`.
 - **Doubles only:** Set `GODOT4_BIN`, then `cargo build --release --no-default-features --features double-precision` and copy as `libgodot_onnx_doubles.*`.
+
+## Web, Android, iOS (experimental)
+
+The `.gdextension` file includes library entries for **web** (wasm32), **Android** (arm64-v8a, armeabi-v7a, x86_64, x86), and **iOS** (device arm64, simulator arm64/x86_64). Building for these platforms requires:
+
+- **Web:** Rust target `wasm32-unknown-emscripten`, Emscripten SDK, and gdext’s `experimental-wasm` feature. Godot export templates must be built with `dlink_enabled=yes` for GDExtension on web. The **ort** crate may not ship a wasm-compatible ONNX Runtime; you may need a different backend or conditional compilation.
+- **Android:** Rust targets `aarch64-linux-android`, `armv7-linux-androideabi`, `i686-linux-android`, `x86_64-linux-android`, and Android NDK. Copy the resulting `.so` files into `sample/addons/godot-onnx/` as `libgodot_onnx.arm64-v8a.so`, `libgodot_onnx.armeabi-v7a.so`, etc.
+- **iOS:** Rust targets `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios` (macOS host with Xcode). Copy the `.dylib` files as `libgodot_onnx.ios.arm64.dylib`, `libgodot_onnx.ios.sim.arm64.dylib`, `libgodot_onnx.ios.sim.x86_64.dylib`.
+
+The same CI workflow (`.github/workflows/ci.yml`) runs desktop builds plus optional jobs for web, Android, and iOS; those jobs use `continue-on-error` because **ort** may not provide prebuilt binaries for these targets. See the workflow file for exact commands and artifact layout.

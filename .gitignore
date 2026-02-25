@@ -10,6 +10,12 @@
 sample/addons/godot-onnx/*.dll
 sample/addons/godot-onnx/*.so
 sample/addons/godot-onnx/*.dylib
+sample/addons/godot-onnx/*.wasm
+sample/addons/godot-onnx/*.arm64-v8a.so
+sample/addons/godot-onnx/*.armeabi-v7a.so
+sample/addons/godot-onnx/*.x86_64.so
+sample/addons/godot-onnx/*.x86.so
+sample/addons/godot-onnx/*.ios.*.dylib
 
 # Generated ONNX models (create_identity_onnx.py / create_matmul_onnx.py)
 sample/models/*.onnx

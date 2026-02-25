@@ -5,8 +5,10 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch: {}
 
 jobs:
+  # --- Desktop: test, build, per-OS artifact + merged artifact ---
   build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -40,29 +42,30 @@ jobs:
           python create_matmul_onnx.py
         shell: bash
 
-      - name: Run tests
-        run: cargo test
-
-      - name: Build release
-        run: cargo build --release
-
-      - name: Put extension in sample project
-        shell: bash
+      - name: Install Janet
         run: |
-          mkdir -p sample/addons/godot-onnx
           case "$RUNNER_OS" in
-            Windows)
-              if [ -f target/release/godot_onnx.dll ]; then cp target/release/godot_onnx.dll sample/addons/godot-onnx/libgodot_onnx.dll; fi
-              if [ -f target/release/libgodot_onnx.dll ]; then cp target/release/libgodot_onnx.dll sample/addons/godot-onnx/libgodot_onnx.dll; fi
-              ;;
             Linux)
-              cp target/release/libgodot_onnx.so sample/addons/godot-onnx/ 2>/dev/null || true
+              git clone --depth 1 https://github.com/janet-lang/janet.git /tmp/janet
+              (cd /tmp/janet && make -j2 && sudo make install)
               ;;
             macOS)
-              cp target/release/libgodot_onnx.dylib sample/addons/godot-onnx/ 2>/dev/null || true
+              brew install janet
+              ;;
+            Windows)
+              pwsh -NoProfile -Command "if (!(Get-Command scoop -ErrorAction SilentlyContinue)) { Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; irm get.scoop.sh | iex }; scoop install janet"
               ;;
           esac
-          ls -la sample/addons/godot-onnx/
+        shell: bash
+
+      - name: Run tests, build, and put extension in sample
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            "$USERPROFILE/scoop/shims/janet.exe" misc/build.janet --ci
+          else
+            janet misc/build.janet --ci
+          fi
+        shell: bash
 
       - name: Upload sample project (with extension)
         uses: actions/upload-artifact@v4
@@ -108,3 +111,115 @@ jobs:
           name: godot-onnx-sample
           path: merged/sample/
           if-no-files-found: error
+
+  # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target) ---
+  build-web:
+    name: Web (wasm32)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-emscripten
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v15
+        with:
+          version: "latest"
+      - name: Build (wasm32)
+        run: cargo build --release --target wasm32-unknown-emscripten
+      - name: Prepare artifact
+        run: |
+          mkdir -p sample/addons/godot-onnx
+          cp target/wasm32-unknown-emscripten/release/libgodot_onnx.wasm sample/addons/godot-onnx/ 2>/dev/null || \
+          cp target/wasm32-unknown-emscripten/release/godot_onnx.wasm sample/addons/godot-onnx/libgodot_onnx.wasm 2>/dev/null || true
+          ls -la sample/addons/godot-onnx/
+      - name: Upload web artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample-Web
+          path: sample/
+
+  build-android:
+    name: Android
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+      - name: Build Android (arm64-v8a)
+        run: cargo build --release --target aarch64-linux-android
+      - name: Build Android (armeabi-v7a)
+        run: cargo build --release --target armv7-linux-androideabi
+      - name: Build Android (x86_64)
+        run: cargo build --release --target x86_64-linux-android
+      - name: Build Android (x86)
+        run: cargo build --release --target i686-linux-android
+      - name: Prepare artifact
+        run: |
+          mkdir -p sample/addons/godot-onnx
+          cp target/aarch64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.arm64-v8a.so 2>/dev/null || true
+          cp target/armv7-linux-androideabi/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.armeabi-v7a.so 2>/dev/null || true
+          cp target/x86_64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.x86_64.so 2>/dev/null || true
+          cp target/i686-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.x86.so 2>/dev/null || true
+          ls -la sample/addons/godot-onnx/
+      - name: Upload Android artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample-Android
+          path: sample/
+
+  build-ios:
+    name: iOS
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Build iOS (device arm64)
+        run: cargo build --release --target aarch64-apple-ios
+      - name: Build iOS (simulator arm64)
+        run: cargo build --release --target aarch64-apple-ios-sim
+      - name: Build iOS (simulator x86_64)
+        run: cargo build --release --target x86_64-apple-ios
+      - name: Prepare artifact
+        run: |
+          mkdir -p sample/addons/godot-onnx
+          cp target/aarch64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.arm64.dylib 2>/dev/null || true
+          cp target/aarch64-apple-ios-sim/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.sim.arm64.dylib 2>/dev/null || true
+          cp target/x86_64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.sim.x86_64.dylib 2>/dev/null || true
+          ls -la sample/addons/godot-onnx/
+      - name: Upload iOS artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample-iOS
+          path: sample/
