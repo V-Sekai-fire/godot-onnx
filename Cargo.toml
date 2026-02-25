@@ -8,8 +8,15 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 godot = { git = "https://github.com/godot-rust/gdext.git", features = ["experimental-threads", "register-docs"] }
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
+# webgpu = cross-platform GPU (Windows/Linux/macOS via Dawn); coreml = macOS acceleration; CPU fallback
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu", "coreml"] }
 ndarray = "0.17"
+
+# Web (wasm32): use ort-web backend instead of native ONNX Runtime
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ort = { version = "2.0.0-rc.11", default-features = false, features = ["ndarray", "alternative-backend"] }
+ort-web = "0.1"
+wasm-bindgen-futures = "0.4"
 
 [features]
 default = ["godot/api-4-5"]
