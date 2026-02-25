@@ -3,8 +3,8 @@
 // ONNXModule: Resource that loads an ONNX model and runs inference via ort.
 // API matches IREEModule: load(path), unload(), call_module(func_name, args) -> Array of ONNXTensor.
 
-use godot::builtin::{GString, VarArray};
-use godot::classes::{FileAccess, Resource};
+use godot::builtin::{GString, PackedByteArray, VarArray};
+use godot::classes::{FileAccess, Resource, ResourceLoader};
 use godot::prelude::*;
 use ndarray::ArrayD;
 use ort::ep::{self, ExecutionProviderDispatch};
@@ -15,8 +15,11 @@ use ort::value::{DynValue, Tensor};
 use std::io::Write;
 use std::sync::Mutex;
 
+use crate::model_data::OnnxModelData;
 use crate::tensor::OnnxTensor;
 
+/// Resource that loads an ONNX model from a Godot path (`res://` or `user://`) and runs inference via ONNX Runtime.
+/// Create with `OnnxModule.new()`, then call [load] to load a model and [call_module] to run inference.
 #[derive(GodotClass)]
 #[class(base = Resource, init)]
 pub struct OnnxModule {
@@ -27,12 +30,12 @@ pub struct OnnxModule {
 
 #[godot_api]
 impl OnnxModule {
-    /// Load ONNX model from Godot path (res:// or user://).
+    /// Load ONNX model from Godot path (res:// or user://). Uses ResourceLoader so imported .onnx files (engine import cache) are loaded; falls back to raw file read for user:// or unimported paths.
     #[func]
     pub fn load(&mut self, path: GString) {
         let path_str = path.to_string();
         self.unload();
-        let bytes = FileAccess::get_file_as_bytes(&path);
+        let bytes = Self::load_bytes(&path);
         if bytes.is_empty() {
             godot_error!("OnnxModule.load: empty or missing file: {}", path_str);
             return;
@@ -64,15 +67,33 @@ impl OnnxModule {
         }
     }
 
+    /// Unload the current model and release the session.
     #[func]
     pub fn unload(&mut self) {
         *self.session.lock().unwrap() = None;
         *self.path.lock().unwrap() = GString::new();
     }
 
+    /// Returns true if a model is currently loaded.
     #[func]
     pub fn is_loaded(&self) -> bool {
         self.session.lock().unwrap().is_some()
+    }
+
+    /// Load model bytes: try ResourceLoader first (imported .onnx from engine cache), then FileAccess.
+    fn load_bytes(path: &GString) -> PackedByteArray {
+        let mut loader = ResourceLoader::singleton();
+        let path_str: String = path.to_string();
+        if let Some(res) = loader.load(&path_str) {
+            let v = res.to_variant();
+            if let Ok(model_data) = Gd::<OnnxModelData>::try_from_variant(&v) {
+                let data = model_data.bind().get_data();
+                if !data.is_empty() {
+                    return data;
+                }
+            }
+        }
+        FileAccess::get_file_as_bytes(path)
     }
 
     /// Run inference. func_name is ignored (ONNX has one graph); args are input tensors in model order.

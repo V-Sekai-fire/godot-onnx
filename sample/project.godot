@@ -9,3 +9,6 @@ run/main_scene="res://main.tscn"
 libraries={
 "res://godot-onnx.gdextension": ""
 }
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/godot-onnx/plugin.cfg")

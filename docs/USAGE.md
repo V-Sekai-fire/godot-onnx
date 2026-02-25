@@ -1,5 +1,7 @@
 # Usage (GDScript)
 
+**.onnx import:** With the addon enabled, `.onnx` files are imported as `OnnxModelData` resources (engine import cache). `mod.load("res://models/identity.onnx")` then loads via [ResourceLoader](https://docs.godotengine.org/en/stable/classes/class_resourceloader.html); no raw file read at runtime for `res://` paths. For `user://` or unimported paths, loading falls back to reading the file directly.
+
 Pattern matches [iree.gd](https://github.com/godotengine/iree.gd):
 
 ```gdscript

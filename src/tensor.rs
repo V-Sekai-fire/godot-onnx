@@ -9,6 +9,7 @@ use godot::obj::NewGd;
 use godot::prelude::*;
 use std::sync::Mutex;
 
+/// RefCounted type holding tensor data for Godot and ONNX Runtime. Create with [from_float32s] or [from_bytes], pass as inputs to [OnnxModule::call_module], and read outputs with [get_data] and [get_dimension].
 #[derive(GodotClass)]
 #[class(base = RefCounted, init)]
 pub struct OnnxTensor {
@@ -96,6 +97,7 @@ impl OnnxTensor {
         out
     }
 
+    /// Returns true if the tensor holds data (non-empty).
     #[func]
     pub fn is_captured(&self) -> bool {
         !self.data.lock().unwrap().is_empty()

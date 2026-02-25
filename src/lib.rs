@@ -6,12 +6,14 @@
 use godot::init::gdextension;
 
 pub mod module;
+pub mod model_data;
 pub mod tensor;
 
 #[cfg(test)]
 mod prop_tests;
 
 pub use module::OnnxModule;
+pub use model_data::OnnxModelData;
 pub use tensor::OnnxTensor;
 
 #[gdextension]
