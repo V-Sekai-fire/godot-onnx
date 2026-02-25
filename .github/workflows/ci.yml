@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@2
+        with:
+          workspaces: .
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate ONNX test models
+        run: |
+          pip install onnx
+          cd sample/models
+          python create_identity_onnx.py
+          python create_matmul_onnx.py
+        shell: bash
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Build release (float)
+        run: cargo build --release
+
+      - name: Build release (doubles)
+        run: cargo build --release --features double-precision

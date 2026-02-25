@@ -1,0 +1,41 @@
+# Rust
+/target/
+
+# Godot
+.godot/
+*.translation
+.import/
+
+# Sample: built extension binaries (rebuilt by misc/build.ps1 or build.sh)
+sample/addons/godot-onnx/*.dll
+sample/addons/godot-onnx/*.so
+sample/addons/godot-onnx/*.dylib
+
+# Generated ONNX models (create_identity_onnx.py / create_matmul_onnx.py)
+sample/models/*.onnx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.eggs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.idea/
+*.swp
+*.swo
+.vscode/
+
+# pre-commit
+.pre-commit-cache/
+
+# Misc
+*.log
+.env
+.env.*

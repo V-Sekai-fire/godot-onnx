@@ -1,0 +1,11 @@
+; Godot ONNX sample project
+config_version=5
+
+[application]
+config/name="Godot ONNX Demo"
+run/main_scene="res://main.tscn"
+
+[gdextension]
+libraries={
+"res://godot-onnx.gdextension": ""
+}

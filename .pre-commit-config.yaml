@@ -1,0 +1,9 @@
+# See https://pre-commit.com for more information
+repos:
+  - repo: local
+    hooks:
+      - id: license-headers
+        name: Check license headers (SPDX)
+        entry: python misc/check-license-headers.py
+        language: system
+        pass_filenames: false

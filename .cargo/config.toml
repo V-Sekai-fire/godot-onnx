@@ -1,0 +1,4 @@
+# Windows: ort (ONNX Runtime) only provides prebuilt binaries for MSVC,
+# not for x86_64-pc-windows-gnu. So we use the default (MSVC) target.
+# Ensure "Build Tools for Visual Studio" with C++ is installed and that
+# you build from "Developer PowerShell" or a shell where link.exe is in PATH.
