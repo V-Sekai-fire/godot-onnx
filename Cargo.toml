@@ -8,9 +8,13 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 godot = { git = "https://github.com/godot-rust/gdext.git", features = ["experimental-threads", "register-docs"] }
-# webgpu = cross-platform GPU (Windows/Linux/macOS via Dawn); coreml = macOS acceleration; CPU fallback
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu", "coreml"] }
+# webgpu = cross-platform GPU; coreml only on macOS (target-specific) to avoid Linux/Windows link issues in CI
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
 ndarray = "0.17"
+
+# macOS: add CoreML execution provider
+[target.'cfg(target_os = "macos")'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu", "coreml"] }
 
 # Web (wasm32): use ort-web backend instead of native ONNX Runtime
 [target.'cfg(target_arch = "wasm32")'.dependencies]
