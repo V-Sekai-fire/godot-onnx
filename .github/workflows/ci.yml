@@ -12,226 +12,6 @@ env:
   DAWN_COMMIT: 536c572abab2602db0b652eda401ebd01e046c11
 
 jobs:
-  # --- Desktop: test, build, per-OS artifact + merged artifact ---
-  build-and-test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Generate ONNX test models
-        run: |
-          pip install onnx
-          cd sample/models
-          python create_identity_onnx.py
-          python create_matmul_onnx.py
-        shell: bash
-
-      - name: Install Janet
-        run: |
-          case "$RUNNER_OS" in
-            Linux)
-              git clone --depth 1 https://github.com/janet-lang/janet.git /tmp/janet
-              (cd /tmp/janet && make -j2 && sudo make install)
-              ;;
-            macOS)
-              brew install janet
-              ;;
-            Windows)
-              pwsh -NoProfile -Command "if (!(Get-Command scoop -ErrorAction SilentlyContinue)) { Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; irm get.scoop.sh | iex }; scoop install janet"
-              ;;
-          esac
-        shell: bash
-
-      - name: Run tests, build, and put extension in sample
-        run: |
-          set -e
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            JANET="$USERPROFILE/scoop/shims/janet.exe"
-          else
-            JANET=janet
-          fi
-          echo "Janet: $($JANET -v 2>/dev/null || true)"
-          echo "Cargo: $(cargo -V)"
-          $JANET misc/build.janet --ci
-        shell: bash
-
-      - name: Upload sample project (with extension)
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-onnx-sample-${{ matrix.os }}
-          path: sample/
-          if-no-files-found: error
-
-  merge-sample:
-    name: Merge sample (all platforms)
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    steps:
-      - name: Download Windows build
-        uses: actions/download-artifact@v4
-        with:
-          name: godot-onnx-sample-Windows
-          path: art-windows
-
-      - name: Download Linux build
-        uses: actions/download-artifact@v4
-        with:
-          name: godot-onnx-sample-Linux
-          path: art-linux
-
-      - name: Download macOS build
-        uses: actions/download-artifact@v4
-        with:
-          name: godot-onnx-sample-macOS
-          path: art-macos
-
-      - name: Merge into one sample project
-        run: |
-          mkdir -p merged/sample/addons/godot-onnx
-          cp -r art-linux/* merged/sample/
-          cp art-windows/addons/godot-onnx/libgodot_onnx.dll merged/sample/addons/godot-onnx/ 2>/dev/null || true
-          cp art-macos/addons/godot-onnx/libgodot_onnx.dylib merged/sample/addons/godot-onnx/ 2>/dev/null || true
-          ls -la merged/sample/addons/godot-onnx/
-
-      - name: Upload merged sample project
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-onnx-sample
-          path: merged/sample/
-          if-no-files-found: error
-
-  # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target) ---
-  build-web:
-    name: Web (wasm32)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-emscripten
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
-      - name: Install Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: "latest"
-      - name: Build (wasm32)
-        run: cargo build --release --target wasm32-unknown-emscripten
-      - name: Prepare artifact
-        run: |
-          mkdir -p sample/addons/godot-onnx
-          cp target/wasm32-unknown-emscripten/release/libgodot_onnx.wasm sample/addons/godot-onnx/ 2>/dev/null || \
-          cp target/wasm32-unknown-emscripten/release/godot_onnx.wasm sample/addons/godot-onnx/libgodot_onnx.wasm 2>/dev/null || true
-          ls -la sample/addons/godot-onnx/
-      - name: Upload web artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-onnx-sample-Web
-          path: sample/
-
-  build-android:
-    name: Android
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26d
-      - name: Build Android (arm64-v8a)
-        run: cargo build --release --target aarch64-linux-android
-      - name: Build Android (armeabi-v7a)
-        run: cargo build --release --target armv7-linux-androideabi
-      - name: Build Android (x86_64)
-        run: cargo build --release --target x86_64-linux-android
-      - name: Build Android (x86)
-        run: cargo build --release --target i686-linux-android
-      - name: Prepare artifact
-        run: |
-          mkdir -p sample/addons/godot-onnx
-          cp target/aarch64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.arm64-v8a.so 2>/dev/null || true
-          cp target/armv7-linux-androideabi/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.armeabi-v7a.so 2>/dev/null || true
-          cp target/x86_64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.x86_64.so 2>/dev/null || true
-          cp target/i686-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.x86.so 2>/dev/null || true
-          ls -la sample/addons/godot-onnx/
-      - name: Upload Android artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-onnx-sample-Android
-          path: sample/
-
-  build-ios:
-    name: iOS
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
-      - name: Build iOS (device arm64)
-        run: cargo build --release --target aarch64-apple-ios
-      - name: Build iOS (simulator arm64)
-        run: cargo build --release --target aarch64-apple-ios-sim
-      - name: Build iOS (simulator x86_64)
-        run: cargo build --release --target x86_64-apple-ios
-      - name: Prepare artifact
-        run: |
-          mkdir -p sample/addons/godot-onnx
-          cp target/aarch64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.arm64.dylib 2>/dev/null || true
-          cp target/aarch64-apple-ios-sim/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.sim.arm64.dylib 2>/dev/null || true
-          cp target/x86_64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.sim.x86_64.dylib 2>/dev/null || true
-          ls -la sample/addons/godot-onnx/
-      - name: Upload iOS artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-onnx-sample-iOS
-          path: sample/
-
   # --- Install Dawn from release (all ort/ort-web platforms) ---
   dawn-linux:
     name: Dawn Linux
@@ -345,3 +125,291 @@ jobs:
         with:
           name: dawn-web
           path: dawn-install/
+
+  # --- Desktop: test, build, per-OS artifact + merged artifact (uses Dawn for ort WebGPU) ---
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    needs: [dawn-linux, dawn-windows, dawn-macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Dawn artifact name
+        id: dawn
+        run: |
+          case "${{ matrix.os }}" in
+            ubuntu-latest) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
+            windows-latest) echo "name=dawn-windows-x64" >> $GITHUB_OUTPUT ;;
+            macos-latest) echo "name=dawn-macos-x64" >> $GITHUB_OUTPUT ;;
+            *) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
+          esac
+
+      - name: Download Dawn
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.dawn.outputs.name }}
+          path: dawn-install
+
+      - name: Set Dawn env for ort
+        run: |
+          echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+        if: runner.os != 'Windows'
+
+      - name: Set Dawn env for ort (Windows)
+        run: |
+          echo "DAWN_ROOT=$env:GITHUB_WORKSPACE\dawn-install" >> $env:GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=$env:GITHUB_WORKSPACE\dawn-install" >> $env:GITHUB_ENV
+        if: runner.os == 'Windows'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate ONNX test models
+        run: |
+          pip install onnx
+          cd sample/models
+          python create_identity_onnx.py
+          python create_matmul_onnx.py
+        shell: bash
+
+      - name: Install Janet
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              git clone --depth 1 https://github.com/janet-lang/janet.git /tmp/janet
+              (cd /tmp/janet && make -j2 && sudo make install)
+              ;;
+            macOS)
+              brew install janet
+              ;;
+            Windows)
+              pwsh -NoProfile -Command "if (!(Get-Command scoop -ErrorAction SilentlyContinue)) { Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; irm get.scoop.sh | iex }; scoop install janet"
+              ;;
+          esac
+        shell: bash
+
+      - name: Run tests, build, and put extension in sample
+        run: |
+          set -e
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            JANET="$USERPROFILE/scoop/shims/janet.exe"
+          else
+            JANET=janet
+          fi
+          echo "Janet: $($JANET -v 2>/dev/null || true)"
+          echo "Cargo: $(cargo -V)"
+          $JANET misc/build.janet --ci
+        shell: bash
+
+      - name: Upload sample project (with extension)
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample-${{ matrix.os }}
+          path: sample/
+          if-no-files-found: error
+
+  merge-sample:
+    name: Merge sample (all platforms)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-onnx-sample-Windows
+          path: art-windows
+
+      - name: Download Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-onnx-sample-Linux
+          path: art-linux
+
+      - name: Download macOS build
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-onnx-sample-macOS
+          path: art-macos
+
+      - name: Merge into one sample project
+        run: |
+          mkdir -p merged/sample/addons/godot-onnx
+          cp -r art-linux/* merged/sample/
+          cp art-windows/addons/godot-onnx/libgodot_onnx.dll merged/sample/addons/godot-onnx/ 2>/dev/null || true
+          cp art-macos/addons/godot-onnx/libgodot_onnx.dylib merged/sample/addons/godot-onnx/ 2>/dev/null || true
+          ls -la merged/sample/addons/godot-onnx/
+
+      - name: Upload merged sample project
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample
+          path: merged/sample/
+          if-no-files-found: error
+
+  # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target); use Dawn artifacts for ort/ort-web ---
+  build-web:
+    name: Web (wasm32)
+    runs-on: ubuntu-latest
+    needs: [dawn-web]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Dawn (emdawnwebgpu for ort-web)
+        uses: actions/download-artifact@v4
+        with:
+          name: dawn-web
+          path: dawn-install
+
+      - name: Set Dawn env for ort-web
+        run: |
+          echo "EMDAWNWEBGPU_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-emscripten
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "latest"
+      - name: Build (wasm32)
+        run: cargo build --release --target wasm32-unknown-emscripten
+      - name: Prepare artifact
+        run: |
+          mkdir -p sample/addons/godot-onnx
+          cp target/wasm32-unknown-emscripten/release/libgodot_onnx.wasm sample/addons/godot-onnx/ 2>/dev/null || \
+          cp target/wasm32-unknown-emscripten/release/godot_onnx.wasm sample/addons/godot-onnx/libgodot_onnx.wasm 2>/dev/null || true
+          ls -la sample/addons/godot-onnx/
+      - name: Upload web artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample-Web
+          path: sample/
+
+  build-android:
+    name: Android
+    runs-on: ubuntu-latest
+    needs: [dawn-android]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Dawn (Android)
+        uses: actions/download-artifact@v4
+        with:
+          name: dawn-android
+          path: dawn-install
+
+      - name: Set Dawn env for ort
+        run: |
+          echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+      - name: Build Android (arm64-v8a)
+        run: cargo build --release --target aarch64-linux-android
+      - name: Build Android (armeabi-v7a)
+        run: cargo build --release --target armv7-linux-androideabi
+      - name: Build Android (x86_64)
+        run: cargo build --release --target x86_64-linux-android
+      - name: Build Android (x86)
+        run: cargo build --release --target i686-linux-android
+      - name: Prepare artifact
+        run: |
+          mkdir -p sample/addons/godot-onnx
+          cp target/aarch64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.arm64-v8a.so 2>/dev/null || true
+          cp target/armv7-linux-androideabi/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.armeabi-v7a.so 2>/dev/null || true
+          cp target/x86_64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.x86_64.so 2>/dev/null || true
+          cp target/i686-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.x86.so 2>/dev/null || true
+          ls -la sample/addons/godot-onnx/
+      - name: Upload Android artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample-Android
+          path: sample/
+
+  build-ios:
+    name: iOS
+    runs-on: macos-latest
+    needs: [dawn-apple-ios]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Dawn (Apple xcframework)
+        uses: actions/download-artifact@v4
+        with:
+          name: dawn-apple-ios
+          path: dawn-install
+
+      - name: Set Dawn env for ort
+        run: |
+          echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Build iOS (device arm64)
+        run: cargo build --release --target aarch64-apple-ios
+      - name: Build iOS (simulator arm64)
+        run: cargo build --release --target aarch64-apple-ios-sim
+      - name: Build iOS (simulator x86_64)
+        run: cargo build --release --target x86_64-apple-ios
+      - name: Prepare artifact
+        run: |
+          mkdir -p sample/addons/godot-onnx
+          cp target/aarch64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.arm64.dylib 2>/dev/null || true
+          cp target/aarch64-apple-ios-sim/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.sim.arm64.dylib 2>/dev/null || true
+          cp target/x86_64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.sim.x86_64.dylib 2>/dev/null || true
+          ls -la sample/addons/godot-onnx/
+      - name: Upload iOS artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-onnx-sample-iOS
+          path: sample/
