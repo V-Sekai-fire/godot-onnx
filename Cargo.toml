@@ -14,7 +14,7 @@ ndarray = "0.17"
 
 # macOS: add CoreML execution provider
 [target.'cfg(target_os = "macos")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu", "coreml"] }
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
 
 # iOS: CoreML only (no WebGPU/Dawn to avoid linking webgpu_dawn)
 [target.'cfg(target_os = "ios")'.dependencies]
