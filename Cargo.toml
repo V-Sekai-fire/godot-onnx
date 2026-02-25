@@ -12,9 +12,9 @@ godot = { git = "https://github.com/godot-rust/gdext.git", features = ["experime
 ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
 ndarray = "0.17"
 
-# macOS: add CoreML execution provider
+# macOS: CoreML for GPU (no WebGPU)
 [target.'cfg(target_os = "macos")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu", "coreml"] }
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
 
 # Android (incl. Meta Quest 3): NNAPI for GPU/NPU acceleration, CPU fallback
 [target.'cfg(target_os = "android")'.dependencies]
