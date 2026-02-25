@@ -29,7 +29,7 @@ impl Default for SessionStore {
     }
 }
 
-/// Build session with platform-appropriate execution providers: CoreML on macOS; WebGPU on Linux/Windows; NNAPI (GPU/NPU) + CPU on Android/Quest 3.
+/// Build session with platform-appropriate execution providers: CoreML on macOS/iOS; WebGPU on Linux/Windows; NNAPI (GPU/NPU) + CPU on Android/Quest 3.
 fn session_builder() -> ort::Result<SessionBuilder> {
     #[cfg(target_os = "macos")]
     {
@@ -57,9 +57,10 @@ fn session_builder() -> ort::Result<SessionBuilder> {
 
     #[cfg(target_os = "ios")]
     {
+        let coreml_ep: ExecutionProviderDispatch = ep::CoreML::default().into();
         let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
         Session::builder()
-            .and_then(|b: SessionBuilder| b.with_execution_providers([cpu_ep]))
+            .and_then(|b: SessionBuilder| b.with_execution_providers([coreml_ep, cpu_ep]))
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "android", target_os = "ios")))]
