@@ -7,6 +7,7 @@ use godot::init::gdextension;
 
 pub mod module;
 pub mod model_data;
+pub(crate) mod sync_cell;
 pub mod tensor;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

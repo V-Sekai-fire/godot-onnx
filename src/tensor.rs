@@ -7,15 +7,16 @@ use godot::builtin::{PackedByteArray, PackedFloat32Array, PackedInt64Array};
 use godot::classes::RefCounted;
 use godot::obj::NewGd;
 use godot::prelude::*;
-use std::sync::Mutex;
+
+use crate::sync_cell::{SyncCell, with_mut};
 
 /// RefCounted type holding tensor data for Godot and ONNX Runtime. Create with [from_float32s] or [from_bytes], pass as inputs to [OnnxModule::call_module], and read outputs with [get_data] and [get_dimension].
 #[derive(GodotClass)]
 #[class(base = RefCounted, init)]
 pub struct OnnxTensor {
     /// Stored as f32 for inference; from_bytes interprets bytes as f32 (little-endian).
-    data: Mutex<Vec<f32>>,
-    dimension: Mutex<Vec<i64>>,
+    data: SyncCell<Vec<f32>>,
+    dimension: SyncCell<Vec<i64>>,
     base: Base<RefCounted>,
 }
 
@@ -69,14 +70,14 @@ impl OnnxTensor {
     }
 
     fn set_data_and_dimension(&mut self, data: Vec<f32>, dimension: Vec<i64>) {
-        *self.data.lock().unwrap() = data;
-        *self.dimension.lock().unwrap() = dimension;
+        with_mut(&self.data, |d| *d = data);
+        with_mut(&self.dimension, |d| *d = dimension);
     }
 
     /// Raw bytes (f32 little-endian), matches IREETensor.get_data().
     #[func]
     pub fn get_data(&self) -> PackedByteArray {
-        let data = self.data.lock().unwrap();
+        let data = with_mut(&self.data, |d| d.clone());
         let mut out = PackedByteArray::new();
         out.resize(data.len() * 4);
         let slice = out.as_mut_slice();
@@ -90,7 +91,7 @@ impl OnnxTensor {
     /// Shape as array of integers (matches IREETensor.get_dimension).
     #[func]
     pub fn get_dimension(&self) -> PackedInt64Array {
-        let dim = self.dimension.lock().unwrap();
+        let dim = with_mut(&self.dimension, |d| d.clone());
         let mut out = PackedInt64Array::new();
         out.resize(dim.len());
         out.as_mut_slice().copy_from_slice(&dim);
@@ -100,17 +101,17 @@ impl OnnxTensor {
     /// Returns true if the tensor holds data (non-empty).
     #[func]
     pub fn is_captured(&self) -> bool {
-        !self.data.lock().unwrap().is_empty()
+        with_mut(&self.data, |d| !d.is_empty())
     }
 
     /// Internal: get shape as slice for ort.
     pub fn shape_slice(&self) -> Vec<i64> {
-        self.dimension.lock().unwrap().clone()
+        with_mut(&self.dimension, |d| d.clone())
     }
 
     /// Internal: get data as slice for ort.
     pub fn data_slice(&self) -> Vec<f32> {
-        self.data.lock().unwrap().clone()
+        with_mut(&self.data, |d| d.clone())
     }
 
     /// Internal: create OnnxTensor from ort output (shape + f32 data).

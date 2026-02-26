@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 // ONNXModule: Resource that loads an ONNX model and runs inference via ort.
 // API matches IREEModule: load(path), unload(), call_module(func_name, args) -> Array of ONNXTensor.
-// On wasm32 we use ort-web; load() is async (spawns future), call_module requires run_async (use call_module_async or stub).
+// On wasm32 we use ort-tract; load() spawns a future to init API and build session.
 
 use godot::builtin::{GString, PackedByteArray, VarArray};
 use godot::classes::{FileAccess, Resource, ResourceLoader};
@@ -14,18 +14,20 @@ use ort::session::builder::SessionBuilder;
 use ort::session::SessionOutputs;
 use ort::value::{DynValue, Tensor};
 use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::model_data::OnnxModelData;
+use crate::sync_cell::{SyncCell, with_mut};
 use crate::tensor::OnnxTensor;
 
 /// Shared session store so wasm32 async load can set the session from a spawned future.
+/// Uses SyncCell: Mutex (Sync) when feature "threads", RefCell when not (e.g. wasm32).
 #[derive(Clone)]
-pub struct SessionStore(Arc<Mutex<Option<Session>>>);
+pub struct SessionStore(Arc<SyncCell<Option<Session>>>);
 
 impl Default for SessionStore {
     fn default() -> Self {
-        Self(Arc::new(Mutex::new(None)))
+        Self(Arc::new(SyncCell::new(None)))
     }
 }
 
@@ -67,7 +69,7 @@ fn session_builder() -> ort::Result<SessionBuilder> {
 #[derive(GodotClass)]
 #[class(base = Resource, init)]
 pub struct OnnxModule {
-    path: Mutex<GString>,
+    path: SyncCell<GString>,
     session: SessionStore,
     base: Base<Resource>,
 }
@@ -97,8 +99,8 @@ impl OnnxModule {
                 match builder.and_then(|b: SessionBuilder| b.commit_from_file(&temp_path)) {
                     Ok(session) => {
                         let _ = std::fs::remove_file(&temp_path);
-                        *self.path.lock().unwrap() = path;
-                        *self.session.0.lock().unwrap() = Some(session);
+                        with_mut(&self.path, |p| *p = path.clone());
+                        with_mut(&self.session.0, |s| *s = Some(session));
                         self.base_mut().notify_property_list_changed();
                         self.base_mut().emit_changed();
                     }
@@ -115,19 +117,11 @@ impl OnnxModule {
         #[cfg(target_arch = "wasm32")]
         {
             use wasm_bindgen_futures::spawn_local;
-            let path_clone = path.clone();
             let bytes_vec: Vec<u8> = bytes.as_slice().to_vec();
             let session_store = self.session.clone();
-            let path_for_emit = path.clone();
+            let path_clone = path.clone();
             spawn_local(async move {
-                let api = match ort_web::api(ort_web::FEATURE_WEBGPU).await {
-                    Ok(a) => a,
-                    Err(e) => {
-                        godot_error!("OnnxModule.load (web): ort-web init failed: {}", e);
-                        return;
-                    }
-                };
-                ort::set_api(api);
+                ort::set_api(ort_tract::api());
                 let builder = match session_builder() {
                     Ok(b) => b,
                     Err(e) => {
@@ -135,32 +129,30 @@ impl OnnxModule {
                         return;
                     }
                 };
-                let session = match builder.commit_from_memory(&bytes_vec).await {
+                let session = match builder.commit_from_memory(&bytes_vec) {
                     Ok(s) => s,
                     Err(e) => {
                         godot_error!("OnnxModule.load (web): commit_from_memory failed: {}", e);
                         return;
                     }
                 };
-                *session_store.0.lock().unwrap() = Some(session);
-                // Note: we cannot call notify_property_list_changed/emit_changed from here without
-                // a reference to self; the script can poll is_loaded() or wait a frame.
+                with_mut(&session_store.0, |s| *s = Some(session));
             });
-            *self.path.lock().unwrap() = path_clone;
+            with_mut(&self.path, |p| *p = path.clone());
         }
     }
 
     /// Unload the current model and release the session.
     #[func]
     pub fn unload(&mut self) {
-        *self.session.0.lock().unwrap() = None;
-        *self.path.lock().unwrap() = GString::new();
+        with_mut(&self.session.0, |s| *s = None);
+        with_mut(&self.path, |p| *p = GString::new());
     }
 
     /// Returns true if a model is currently loaded.
     #[func]
     pub fn is_loaded(&self) -> bool {
-        self.session.0.lock().unwrap().is_some()
+        with_mut(&self.session.0, |s| s.is_some())
     }
 
     /// Load model bytes: try ResourceLoader first (imported .onnx from engine cache), then FileAccess.
@@ -183,8 +175,8 @@ impl OnnxModule {
     /// On web (wasm32) only run_async is available; call_module returns empty — use call_module_async when implemented.
     #[func]
     pub fn call_module(&mut self, _func_name: GString, args: VarArray) -> VarArray {
-        let mut session_guard = self.session.0.lock().unwrap();
-        let Some(session) = session_guard.as_mut() else {
+        with_mut(&self.session.0, |session_opt| {
+        let Some(session) = session_opt.as_mut() else {
             godot_error!("OnnxModule.call_module: module not loaded");
             return VarArray::new();
         };
@@ -276,5 +268,6 @@ impl OnnxModule {
         }
         result
         }
+        })
     }
 }
