@@ -212,6 +212,25 @@ jobs:
         uses: mymindstorm/setup-emsdk@v14
         with:
           version: "latest"
+      - name: Set bindgen env for wasm32 (Emscripten sysroot + libclang)
+        run: |
+          # godot-ffi runs bindgen for wasm32; bindgen was using host /usr/include and failed.
+          # Use Emscripten sysroot and libclang so bindgen parses headers for wasm32.
+          if [ -z "$EMSDK" ]; then
+            EMSDK=$(dirname $(dirname $(dirname $(which emcc))))
+            echo "EMSDK=$EMSDK" >> $GITHUB_ENV
+          fi
+          SYSROOT=$(emcc -print-sysroot 2>/dev/null || echo "$EMSDK/upstream/emscripten/cache/sysroot")
+          echo "BINDGEN_EXTRA_CLANG_ARGS_wasm32_unknown_emscripten=--sysroot=$SYSROOT --target=wasm32-unknown-emscripten" >> $GITHUB_ENV
+          # Prefer Emscripten-bundled libclang so bindgen uses the right toolchain
+          for libdir in "$EMSDK/upstream/lib" "$EMSDK/upstream/llvm/lib"; do
+            if [ -d "$libdir" ] && ls "$libdir"/libclang*.so* 1>/dev/null 2>&1; then
+              echo "LIBCLANG_PATH=$libdir" >> $GITHUB_ENV
+              break
+            fi
+          done
+          echo "SYSROOT=$SYSROOT" >> $GITHUB_ENV
+          echo "Set BINDGEN_EXTRA_CLANG_ARGS_wasm32_unknown_emscripten and LIBCLANG_PATH (if found)"
       - name: Download V-Sekai Godot (for API generation)
         run: |
           curl -sL -o v-sekai-godot.zip "https://github.com/V-Sekai/world-godot/releases/download/latest.v-sekai-editor-281/v-sekai-godot-linuxbsd.zip"
