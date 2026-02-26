@@ -55,9 +55,9 @@ Open the `sample/` folder as a Godot project with **official Godot 4.6** and run
 
 ## Android, iOS (experimental)
 
-The `.gdextension` file includes library entries for **Android** (arm64-v8a, armeabi-v7a, x86_64, x86) and **iOS** (device arm64, simulator arm64/x86_64). **Web (wasm32) is not supported.**
+The `.gdextension` file includes library entries for **Android** (arm64-v8a only, e.g. Meta Quest) and **iOS** (device arm64, simulator arm64/x86_64). **Web (wasm32) is not supported.**
 
-- **Android:** Rust targets `aarch64-linux-android`, `armv7-linux-androideabi`, `i686-linux-android`, `x86_64-linux-android`, and Android NDK. Copy the resulting `.so` files into `sample/addons/godot-onnx/` as `libgodot_onnx.arm64-v8a.so`, `libgodot_onnx.armeabi-v7a.so`, etc.
+- **Android (arm64 only):** Rust target `aarch64-linux-android` and Android NDK. Copy the resulting `.so` into `sample/addons/godot-onnx/` as `libgodot_onnx.arm64-v8a.so`.
 - **iOS:** Rust targets `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios` (macOS host with Xcode). Copy the `.dylib` files as `libgodot_onnx.ios.arm64.dylib`, `libgodot_onnx.ios.sim.arm64.dylib`, `libgodot_onnx.ios.sim.x86_64.dylib`.
 
 The CI workflow (`.github/workflows/ci.yml`) runs desktop builds plus optional jobs for Android and iOS; those jobs use `continue-on-error` because **ort** may not provide prebuilt binaries for these targets. See the workflow file for exact commands and artifact layout.

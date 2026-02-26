@@ -271,7 +271,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -280,21 +280,12 @@ jobs:
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
-      - name: Build Android (arm64-v8a)
+      - name: Build Android (arm64-v8a, Meta Quest)
         run: cargo build --release --target aarch64-linux-android
-      - name: Build Android (armeabi-v7a)
-        run: cargo build --release --target armv7-linux-androideabi
-      - name: Build Android (x86_64)
-        run: cargo build --release --target x86_64-linux-android
-      - name: Build Android (x86)
-        run: cargo build --release --target i686-linux-android
       - name: Prepare artifact
         run: |
           mkdir -p sample/addons/godot-onnx
           cp target/aarch64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.arm64-v8a.so 2>/dev/null || true
-          cp target/armv7-linux-androideabi/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.armeabi-v7a.so 2>/dev/null || true
-          cp target/x86_64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.x86_64.so 2>/dev/null || true
-          cp target/i686-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.x86.so 2>/dev/null || true
           ls -la sample/addons/godot-onnx/
       - name: Upload Android artifact
         if: success()
