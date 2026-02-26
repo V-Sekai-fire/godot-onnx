@@ -24,19 +24,20 @@ if result.size() > 0:
 
 | Class          | Methods / static methods                                                                                                                       |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **OnnxModule** | `load(path)`, `unload()`, `is_loaded()`, `get_execution_providers()` → `String`, `is_accelerated()` → `bool`, `call_module(func_name, args)` → `Array` of `OnnxTensor`. `func_name` is ignored (single ONNX graph). |
+| **OnnxModule** | `load(path)`, `unload()`, `is_loaded()`, `call_module(func_name, args)` → `Array` of `OnnxTensor`. `func_name` is ignored (single ONNX graph). |
 | **OnnxTensor** | `OnnxTensor.from_float32s(float32s, dimension)`, `OnnxTensor.from_bytes(bytes, dimension)`, `get_data()`, `get_dimension()`, `is_captured()`.  |
 
 Inputs to `call_module` must be `OnnxTensor` instances; pass them in the same order as the model’s inputs. Outputs are returned as an array of `OnnxTensor`.
 
-**Backends:** The extension uses ONNX Runtime's WebGPU execution provider on all platforms.
+**Backends:** Linux uses WebGPU (Dawn), Windows uses DirectML, macOS/iOS use CoreML; Android uses NNAPI; other platforms use CPU.
 
-## Test models (identity & matmul)
+## Test models (identity, matmul, benchmark)
 
-The sample expects two small ONNX models under `sample/models/`:
+The sample expects three ONNX models under `sample/models/`:
 
 - **identity.onnx**: one input `x` [3], one output `y` [3] (Identity op).
 - **matmul.onnx**: inputs `A` [2,3], `B` [3,2]; output `Y` [2,2] (MatMul op).
+- **benchmark.onnx**: same I/O as matmul but does 4 MatMuls in sequence. Run it in a loop and measure time: **CPU is much slower than accelerated**, so you can tell the difference.
 
 Scripts to generate them (run from `sample/models/`):
 
@@ -45,6 +46,7 @@ cd sample/models
 pip install onnx
 python create_identity_onnx.py   # writes identity.onnx
 python create_matmul_onnx.py     # writes matmul.onnx
+python create_benchmark_onnx.py  # writes benchmark.onnx
 ```
 
 Then run the Godot sample scene; it will load these from `res://models/...` (project root for the sample is `sample/`, so `res://models/` is `sample/models/`).
@@ -56,7 +58,9 @@ When the sample runs successfully, the Godot console shows:
 ```
 Identity output: [1.0, 2.0, 3.0] dim: [3]
 MatMul output dim: [2, 2] data: [22.0, 28.0, 49.0, 64.0]
+Benchmark: 100 runs in X.XX ms (X.XXX ms/run) — lower = accelerated
 ```
 
 - **Identity**: input `[1, 2, 3]` is passed through unchanged; shape `[3]`.
 - **MatMul**: sample uses `A` [2×3] and `B` [3×2]; result `Y` is [2×2] with values `[22, 28, 49, 64]`.
+- **Benchmark**: 100 inferences timed; lower ms/run means you are on an accelerated backend (WebGPU, DirectML, CoreML, or NNAPI).

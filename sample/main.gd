@@ -8,8 +8,6 @@ var _module: OnnxModule
 
 func _ready() -> void:
 	_module = OnnxModule.new()
-	print("godot-onnx get_execution_providers(): ", _module.get_execution_providers())
-	print("godot-onnx is_accelerated(): ", _module.is_accelerated())
 	# Identity: one input, same shape output
 	_module.load("res://models/identity.onnx")
 	if _module.is_loaded():
@@ -23,6 +21,13 @@ func _ready() -> void:
 		_run_matmul()
 	else:
 		push_warning("matmul.onnx not found; add res://models/matmul.onnx to test matmul")
+	# Benchmark: heavier model to tell CPU vs accelerated by timing
+	_module.unload()
+	_module.load("res://models/benchmark.onnx")
+	if _module.is_loaded():
+		_run_benchmark()
+	else:
+		push_warning("benchmark.onnx not found; run create_benchmark_onnx.py in sample/models")
 
 func _run_identity() -> void:
 	var x := PackedFloat32Array([1.0, 2.0, 3.0])
@@ -45,3 +50,17 @@ func _run_matmul() -> void:
 	if result.size() > 0:
 		var out: OnnxTensor = result[0] as OnnxTensor
 		print("MatMul output dim: ", out.get_dimension(), " data: ", out.get_data().to_float32_array())
+
+func _run_benchmark() -> void:
+	# Run benchmark model multiple times and measure; CPU is much slower than accelerated
+	var a := PackedFloat32Array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+	var b := PackedFloat32Array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+	var dim := PackedInt64Array([2, 3])
+	var ta := OnnxTensor.from_float32s(a, dim)
+	var tb := OnnxTensor.from_float32s(b, dim)
+	var n := 100
+	var start := Time.get_ticks_usec()
+	for i in n:
+		_module.call_module("", [ta, tb])
+	var elapsed_ms := (Time.get_ticks_usec() - start) / 1000.0
+	print("Benchmark: %d runs in %.2f ms (%.3f ms/run) — lower = accelerated" % [n, elapsed_ms, elapsed_ms / n])
