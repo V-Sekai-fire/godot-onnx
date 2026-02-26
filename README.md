@@ -35,6 +35,7 @@ Benchmark: 100 runs in X.XX ms (X.XXX ms/run) — lower = accelerated
 
 - [Build](docs/BUILD.md) — Requirements, build steps, float/doubles variants
 - [Usage](docs/USAGE.md) — GDScript API, test models (identity/matmul)
+- [Scenes](docs/SCENES.md) — Scenes matching [iree.gd](https://github.com/iree-gd/iree.gd) (main/ESRGAN, pose_detection, mediapipe_pose_landmark_full)
 - [Testing](docs/TESTING.md) — `cargo test`, Godot sample
 - [Project layout](docs/LAYOUT.md) — Directory structure, pre-commit
 

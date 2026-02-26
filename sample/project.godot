@@ -4,6 +4,7 @@ config_version=5
 [application]
 config/name="Godot ONNX Demo"
 run/main_scene="res://main.tscn"
+; Scenes matching iree.gd: res://scenes/main/main.tscn (ESRGAN), res://scenes/pose_detection/pose_detection.tscn, etc. See docs/SCENES.md.
 
 [gdextension]
 libraries={

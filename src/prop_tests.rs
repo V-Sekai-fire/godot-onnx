@@ -5,7 +5,7 @@
 
 #![cfg(test)]
 
-use ndarray::{Array1, Array2};
+use ndarray::{Array1, Array2, ArrayD, IxDyn};
 use ort::session::builder::SessionBuilder;
 use ort::session::Session;
 use ort::value::Tensor;
@@ -15,6 +15,16 @@ use std::path::Path;
 
 const IDENTITY_PATH: &str = "sample/models/identity.onnx";
 const MATMUL_PATH: &str = "sample/models/matmul.onnx";
+
+// Scene models (iree.gd equivalents; download via sample/models/download_onnx_models.py)
+const ESRGAN_PATH: &str = "sample/models/esrgan.onnx";
+// Preprocessed ESRGAN input: [1,3,128,128] NCHW f32 LE from baboon.png (generate with sample/models/generate_esrgan_input.py)
+const ESRGAN_INPUT_RAW_PATH: &str = "sample/models/esrgan_input.raw";
+const ESRGAN_RESULT_PNG_PATH: &str = "sample/models/esrgan_result.png";
+const ESRGAN_INPUT_H: usize = 128;
+const ESRGAN_INPUT_W: usize = 128;
+const ESRGAN_OUTPUT_H: usize = 512;
+const ESRGAN_OUTPUT_W: usize = 512;
 
 fn identity_session() -> Option<Session> {
     if !Path::new(IDENTITY_PATH).exists() {
@@ -32,6 +42,107 @@ fn matmul_session() -> Option<Session> {
     Session::builder()
         .and_then(|b: SessionBuilder| b.commit_from_file(MATMUL_PATH))
         .ok()
+}
+
+/// Load model from path, run one inference. `dims` = input shape; `use_f32` = true for float, false for int32.
+fn run_scene_model(path: &str, dims: &[usize], use_f32: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let _ = run_scene_model_with_output(path, dims, use_f32)?;
+    Ok(())
+}
+
+/// Like run_scene_model but returns the first output shape and f32 data (for assertion and saving output).
+fn run_scene_model_with_output(
+    path: &str,
+    dims: &[usize],
+    use_f32: bool,
+) -> Result<(Vec<usize>, Vec<f32>), Box<dyn std::error::Error>> {
+    if !Path::new(path).exists() {
+        return Err("model file not found".into());
+    }
+    let mut session = Session::builder()?
+        .commit_from_file(path)?;
+    let input_name = session
+        .inputs()
+        .first()
+        .ok_or("no inputs")?
+        .name()
+        .to_string();
+    let first_output_name = session
+        .outputs()
+        .first()
+        .ok_or("no outputs")?
+        .name()
+        .to_string();
+    let tensor = if use_f32 {
+        let arr = ArrayD::<f32>::zeros(IxDyn(dims));
+        Tensor::from_array(arr)?.into_dyn()
+    } else {
+        let arr = ArrayD::<i32>::zeros(IxDyn(dims));
+        Tensor::from_array(arr)?.into_dyn()
+    };
+    let mut feed = HashMap::new();
+    feed.insert(input_name, tensor);
+    let outputs = session.run(feed)?;
+    let out_val = outputs
+        .get(&first_output_name)
+        .ok_or("missing first output")?;
+    let view = out_val.try_extract_array::<f32>()?;
+    let shape: Vec<usize> = view.shape().iter().copied().collect();
+    let data: Vec<f32> = view.iter().copied().collect();
+    Ok((shape, data))
+}
+
+/// Run model with custom float32 input (e.g. ESRGAN from photo); returns first output shape and f32 data.
+fn run_scene_model_with_float_input(
+    path: &str,
+    input_arr: ArrayD<f32>,
+) -> Result<(Vec<usize>, Vec<f32>), Box<dyn std::error::Error>> {
+    if !Path::new(path).exists() {
+        return Err("model file not found".into());
+    }
+    let mut session = Session::builder()?
+        .commit_from_file(path)?;
+    let input_name = session
+        .inputs()
+        .first()
+        .ok_or("no inputs")?
+        .name()
+        .to_string();
+    let first_output_name = session
+        .outputs()
+        .first()
+        .ok_or("no outputs")?
+        .name()
+        .to_string();
+    let tensor = Tensor::from_array(input_arr)?.into_dyn();
+    let mut feed = HashMap::new();
+    feed.insert(input_name, tensor);
+    let outputs = session.run(feed)?;
+    let out_val = outputs
+        .get(&first_output_name)
+        .ok_or("missing first output")?;
+    let view = out_val.try_extract_array::<f32>()?;
+    let shape: Vec<usize> = view.shape().iter().copied().collect();
+    let data: Vec<f32> = view.iter().copied().collect();
+    Ok((shape, data))
+}
+
+/// Load preprocessed ESRGAN input from raw file: [1,3,128,128] NCHW f32 LE (normalized 0–1).
+fn load_esrgan_input_raw(path: &str) -> Result<ArrayD<f32>, Box<dyn std::error::Error>> {
+    let buf = std::fs::read(Path::new(path))?;
+    let n = 1 * 3 * ESRGAN_INPUT_H * ESRGAN_INPUT_W;
+    if buf.len() != n * 4 {
+        return Err(format!("esrgan input raw: expected {} bytes, got {}", n * 4, buf.len()).into());
+    }
+    let mut data = Vec::with_capacity(n);
+    for chunk in buf.chunks_exact(4) {
+        data.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+    }
+    let arr = ArrayD::from_shape_vec(
+        IxDyn(&[1, 3, ESRGAN_INPUT_H, ESRGAN_INPUT_W]),
+        data,
+    )?;
+    Ok(arr)
 }
 
 fn run_identity(session: &mut Session, x: [f32; 3]) -> Result<[f32; 3], Box<dyn std::error::Error>> {
@@ -173,4 +284,98 @@ proptest! {
             }
         }
     }
+}
+
+// --- Scene model tests (iree.gd equivalents); skip if model not downloaded ---
+
+#[test]
+fn scene_esrgan_runs() {
+    // Qualcomm ESRGAN: NCHW input [1, 3, 128, 128]
+    let r = run_scene_model(ESRGAN_PATH, &[1, 3, 128, 128], true);
+    if let Err(e) = &r {
+        if e.to_string().contains("not found") {
+            return;
+        }
+    }
+    r.expect("esrgan inference");
+}
+
+#[test]
+fn scene_esrgan_output_shape_and_finite() {
+    // Qualcomm ESRGAN: input [1,3,128,128] -> output [1,3,512,512] (4× upscale), all finite
+    let Ok((shape, data)) = run_scene_model_with_output(ESRGAN_PATH, &[1, 3, 128, 128], true) else {
+        return; // skip if model missing
+    };
+    assert_eq!(shape.len(), 4, "ESRGAN output should be 4D [N,C,H,W]");
+    assert_eq!(shape[0], 1);
+    assert_eq!(shape[1], 3);
+    assert_eq!(shape[2], 512, "4×128 = 512");
+    assert_eq!(shape[3], 512);
+    assert_eq!(data.len(), 1 * 3 * 512 * 512);
+    for (i, &v) in data.iter().enumerate() {
+        assert!(v.is_finite(), "ESRGAN output[{}] = {} not finite", i, v);
+    }
+}
+
+#[test]
+fn scene_esrgan_with_photo() {
+    // ESRGAN with preprocessed photo (baboon.png → esrgan_input.raw): output shape and all finite.
+    // Generate input: python sample/models/generate_esrgan_input.py
+    let input_img = match load_esrgan_input_raw(ESRGAN_INPUT_RAW_PATH) {
+        Ok(a) => a,
+        Err(_) => return, // skip if raw missing (run generate_esrgan_input.py from repo root)
+    };
+    let Ok((shape, data)) = run_scene_model_with_float_input(ESRGAN_PATH, input_img) else {
+        return; // skip if model missing
+    };
+    assert_eq!(shape.len(), 4, "ESRGAN output should be 4D [N,C,H,W]");
+    assert_eq!(shape[0], 1);
+    assert_eq!(shape[1], 3);
+    assert_eq!(shape[2], 512, "4×128 = 512");
+    assert_eq!(shape[3], 512);
+    assert_eq!(data.len(), 1 * 3 * 512 * 512);
+    for (i, &v) in data.iter().enumerate() {
+        assert!(v.is_finite(), "ESRGAN output[{}] = {} not finite", i, v);
+    }
+}
+
+/// Save ESRGAN output [1,3,H,W] f32 (NCHW) to PNG; values clamped to 0..1 then scaled to 0..255.
+fn save_esrgan_output_as_png(
+    data: &[f32],
+    out_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (h, w) = (ESRGAN_OUTPUT_H, ESRGAN_OUTPUT_W);
+    assert_eq!(data.len(), 1 * 3 * h * w);
+    let mut img = image::RgbImage::new(w as u32, h as u32);
+    for y in 0..h {
+        for x in 0..w {
+            let r = (data[0 * h * w + y * w + x].clamp(0.0, 1.0) * 255.0).round() as u8;
+            let g = (data[1 * h * w + y * w + x].clamp(0.0, 1.0) * 255.0).round() as u8;
+            let b = (data[2 * h * w + y * w + x].clamp(0.0, 1.0) * 255.0).round() as u8;
+            img.put_pixel(x as u32, y as u32, image::Rgb([r, g, b]));
+        }
+    }
+    img.save(Path::new(out_path))?;
+    Ok(())
+}
+
+#[test]
+fn scene_esrgan_save_png() {
+    // Run ESRGAN with photo input and save upscaled result as sample/models/esrgan_result.png
+    let input_img = match load_esrgan_input_raw(ESRGAN_INPUT_RAW_PATH) {
+        Ok(a) => a,
+        Err(_) => return, // skip if raw missing
+    };
+    let Ok((shape, data)) = run_scene_model_with_float_input(ESRGAN_PATH, input_img) else {
+        return; // skip if model missing
+    };
+    assert_eq!(shape.len(), 4);
+    assert_eq!(shape[0], 1);
+    assert_eq!(shape[1], 3);
+    assert_eq!(shape[2], ESRGAN_OUTPUT_H);
+    assert_eq!(shape[3], ESRGAN_OUTPUT_W);
+    if let Err(e) = save_esrgan_output_as_png(&data, ESRGAN_RESULT_PNG_PATH) {
+        panic!("failed to save ESRGAN result PNG: {}", e);
+    }
+    println!("Saved {}", ESRGAN_RESULT_PNG_PATH);
 }

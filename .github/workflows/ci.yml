@@ -88,6 +88,20 @@ jobs:
           python create_benchmark_onnx.py
         shell: bash
 
+      - name: Download scene ONNX models (esrgan)
+        run: |
+          cd sample/models
+          python download_onnx_models.py
+        shell: bash
+        continue-on-error: true
+
+      - name: Generate ESRGAN test input (optional)
+        run: |
+          pip install Pillow
+          python sample/models/generate_esrgan_input.py
+        shell: bash
+        continue-on-error: true
+
       - name: Install Janet
         run: |
           case "$RUNNER_OS" in
@@ -117,6 +131,46 @@ jobs:
           $JANET misc/build.janet --ci
         shell: bash
 
+      - name: Install Godot (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          curl -sL -o godot.zip "https://github.com/godotengine/godot/releases/download/4.2-stable/Godot_v4.2-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          chmod +x Godot_v4.2-stable_linux.x86_64
+          echo "GODOT_BIN=$(pwd)/Godot_v4.2-stable_linux.x86_64" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Run Godot inference tests (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: $GODOT_BIN --path sample --headless -s res://scripts/test_inference.gd
+        shell: bash
+
+      - name: Download scene ONNX models (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd sample/models
+          python download_onnx_models.py
+        continue-on-error: true
+        shell: bash
+
+      - name: Export inference images (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          $GODOT_BIN --path sample --headless -s res://scripts/export_inference_images.gd || true
+          mkdir -p inference_output
+          UDIR="$HOME/.local/share/godot/app_userdata/Godot ONNX Demo/inference_output"
+          if [ -d "$UDIR" ]; then cp -r "$UDIR"/* inference_output/; fi
+        continue-on-error: true
+        shell: bash
+
+      - name: Upload inference images
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: inference-images-${{ github.run_id }}
+          path: inference_output/
+        continue-on-error: true
+
       - name: Cache sample project (for merge)
         uses: actions/cache/save@v4
         with:
@@ -131,6 +185,7 @@ jobs:
     if: always() && needs.build-and-test.result == 'success'
     steps:
       - name: Restore Linux build
+        id: restore-linux
         uses: actions/cache/restore@v4
         with:
           path: art-linux
@@ -167,6 +222,15 @@ jobs:
 
       - name: Merge into one sample project
         run: |
+          set -e
+          if [ "${{ steps.restore-linux.outputs.cache-hit }}" != "true" ]; then
+            echo "::error::Linux build cache was not restored (key: sample-ubuntu-latest-${{ github.run_id }}). Merge cannot continue."
+            exit 1
+          fi
+          if [ ! -d "art-linux" ] || [ -z "$(ls -A art-linux 2>/dev/null)" ]; then
+            echo "::error::art-linux is missing or empty after cache restore."
+            exit 1
+          fi
           mkdir -p merged/sample/addons/godot-onnx
           cp -r art-linux/* merged/sample/
           cp art-windows/addons/godot-onnx/libgodot_onnx.dll merged/sample/addons/godot-onnx/ 2>/dev/null || true
