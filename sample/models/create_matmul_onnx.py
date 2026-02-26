@@ -12,7 +12,12 @@ def main():
     out = helper.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2])
     node = helper.make_node("MatMul", inputs=["A", "B"], outputs=["Y"])
     graph = helper.make_graph([node], "matmul", [a, b], [out])
-    model = helper.make_model(graph)
+    # IR 11 and opset 11 for ort compatibility (max supported IR version: 11)
+    model = helper.make_model(
+        graph,
+        ir_version=11,
+        opset_imports=[helper.make_opsetid("", 11)],
+    )
     check_model(model)
     out_path = "matmul.onnx"
     with open(out_path, "wb") as f:

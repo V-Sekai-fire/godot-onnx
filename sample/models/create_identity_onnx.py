@@ -11,7 +11,12 @@ def main():
     out_y = helper.make_tensor_value_info("y", TensorProto.FLOAT, [3])
     node = helper.make_node("Identity", inputs=["x"], outputs=["y"])
     graph = helper.make_graph([node], "identity", [in_x], [out_y])
-    model = helper.make_model(graph)
+    # IR 11 and opset 11 for ort compatibility (max supported IR version: 11)
+    model = helper.make_model(
+        graph,
+        ir_version=11,
+        opset_imports=[helper.make_opsetid("", 11)],
+    )
     check_model(model)
     out_path = "identity.onnx"
     with open(out_path, "wb") as f:

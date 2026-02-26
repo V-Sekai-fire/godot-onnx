@@ -26,11 +26,11 @@ jobs:
           mkdir -p dawn-install
           tar -xzf dawn.tar.gz -C dawn-install
           ls -laR dawn-install/
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Cache Dawn
+        uses: actions/cache/save@v4
         with:
-          name: dawn-linux-x64
-          path: dawn-install/
+          path: dawn-install
+          key: dawn-linux-${{ env.DAWN_COMMIT }}
 
   dawn-windows:
     name: "Dawn: Windows"
@@ -45,11 +45,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path dawn-install | Out-Null
           tar -xzf dawn.tar.gz -C dawn-install
           Get-ChildItem dawn-install -Recurse | Select-Object -First 25
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Cache Dawn
+        uses: actions/cache/save@v4
         with:
-          name: dawn-windows-x64
-          path: dawn-install/
+          path: dawn-install
+          key: dawn-windows-${{ env.DAWN_COMMIT }}
+          enableCrossOsArchive: true
 
   # --- Desktop: test, build, per-OS artifact + merged artifact (Dawn only for Linux/Windows ort WebGPU) ---
   build-and-test:
@@ -64,23 +65,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set Dawn artifact name
+      - name: Set Dawn cache key
         id: dawn
         if: matrix.os != 'macos-latest'
         shell: bash
         run: |
           case "${{ matrix.os }}" in
-            ubuntu-latest) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
-            windows-latest) echo "name=dawn-windows-x64" >> $GITHUB_OUTPUT ;;
-            *) echo "name=dawn-linux-x64" >> $GITHUB_OUTPUT ;;
+            ubuntu-latest) echo "key=dawn-linux-${{ env.DAWN_COMMIT }}" >> $GITHUB_OUTPUT ;;
+            windows-latest) echo "key=dawn-windows-${{ env.DAWN_COMMIT }}" >> $GITHUB_OUTPUT ;;
+            *) echo "key=dawn-linux-${{ env.DAWN_COMMIT }}" >> $GITHUB_OUTPUT ;;
           esac
 
-      - name: Download Dawn
+      - name: Restore Dawn
         if: matrix.os != 'macos-latest'
-        uses: actions/download-artifact@v4
+        uses: actions/cache/restore@v4
         with:
-          name: ${{ steps.dawn.outputs.name }}
           path: dawn-install
+          key: ${{ steps.dawn.outputs.key }}
 
       - name: Set Dawn env for ort
         if: matrix.os != 'macos-latest' && runner.os != 'Windows'
@@ -146,12 +147,12 @@ jobs:
           $JANET misc/build.janet --ci
         shell: bash
 
-      - name: Upload sample project (with extension)
-        uses: actions/upload-artifact@v4
+      - name: Cache sample project (for merge)
+        uses: actions/cache/save@v4
         with:
-          name: godot-onnx-sample-${{ matrix.os }}
-          path: sample/
-          if-no-files-found: error
+          path: sample
+          key: sample-${{ matrix.os }}-${{ github.run_id }}
+          enableCrossOsArchive: ${{ matrix.os != 'ubuntu-latest' }}
 
   merge-sample:
     name: "Merge: sample"
@@ -159,37 +160,40 @@ jobs:
     needs: [build-and-test, build-android, build-ios]
     if: always() && needs.build-and-test.result == 'success'
     steps:
-      - name: Download Windows build
-        uses: actions/download-artifact@v4
+      - name: Restore Linux build
+        uses: actions/cache/restore@v4
         with:
-          name: godot-onnx-sample-windows-latest
-          path: art-windows
-
-      - name: Download Linux build
-        uses: actions/download-artifact@v4
-        with:
-          name: godot-onnx-sample-ubuntu-latest
           path: art-linux
+          key: sample-ubuntu-latest-${{ github.run_id }}
 
-      - name: Download macOS build
-        uses: actions/download-artifact@v4
+      - name: Restore Windows build
+        uses: actions/cache/restore@v4
         with:
-          name: godot-onnx-sample-macos-latest
+          path: art-windows
+          key: sample-windows-latest-${{ github.run_id }}
+          enableCrossOsArchive: true
+
+      - name: Restore macOS build
+        uses: actions/cache/restore@v4
+        with:
           path: art-macos
+          key: sample-macos-latest-${{ github.run_id }}
+          enableCrossOsArchive: true
 
-      - name: Download Android build
+      - name: Restore Android build
         if: needs.build-android.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/cache/restore@v4
         with:
-          name: godot-onnx-sample-Android
           path: art-android
+          key: sample-Android-${{ github.run_id }}
 
-      - name: Download iOS build
+      - name: Restore iOS build
         if: needs.build-ios.result == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/cache/restore@v4
         with:
-          name: godot-onnx-sample-iOS
           path: art-ios
+          key: sample-iOS-${{ github.run_id }}
+          enableCrossOsArchive: true
 
       - name: Merge into one sample project
         run: |
@@ -238,17 +242,17 @@ jobs:
             export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android26-clang"
           fi
           cargo build --release --target aarch64-linux-android
-      - name: Prepare artifact
+      - name: Prepare and cache sample (for merge)
         run: |
           mkdir -p sample/addons/godot-onnx
           cp target/aarch64-linux-android/release/libgodot_onnx.so sample/addons/godot-onnx/libgodot_onnx.arm64-v8a.so 2>/dev/null || true
           ls -la sample/addons/godot-onnx/
-      - name: Upload Android artifact
+      - name: Cache sample (for merge)
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/cache/save@v4
         with:
-          name: godot-onnx-sample-Android
-          path: sample/
+          path: sample
+          key: sample-Android-${{ github.run_id }}
 
   build-ios:
     name: "Build: iOS"
@@ -268,14 +272,15 @@ jobs:
           workspaces: .
       - name: Build iOS (device arm64 only)
         run: cargo build --release --target aarch64-apple-ios
-      - name: Prepare artifact
+      - name: Prepare and cache sample (for merge)
         run: |
           mkdir -p sample/addons/godot-onnx
           cp target/aarch64-apple-ios/release/libgodot_onnx.dylib sample/addons/godot-onnx/libgodot_onnx.ios.arm64.dylib 2>/dev/null || true
           ls -la sample/addons/godot-onnx/
-      - name: Upload iOS artifact
+      - name: Cache sample (for merge)
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/cache/save@v4
         with:
-          name: godot-onnx-sample-iOS
-          path: sample/
+          path: sample
+          key: sample-iOS-${{ github.run_id }}
+          enableCrossOsArchive: true
