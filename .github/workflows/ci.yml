@@ -156,7 +156,8 @@ jobs:
   merge-sample:
     name: "Merge: sample"
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [build-and-test, build-android, build-ios]
+    if: always() && needs.build-and-test.result == 'success'
     steps:
       - name: Download Windows build
         uses: actions/download-artifact@v4
@@ -176,12 +177,28 @@ jobs:
           name: godot-onnx-sample-macos-latest
           path: art-macos
 
+      - name: Download Android build
+        if: needs.build-android.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-onnx-sample-Android
+          path: art-android
+
+      - name: Download iOS build
+        if: needs.build-ios.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-onnx-sample-iOS
+          path: art-ios
+
       - name: Merge into one sample project
         run: |
           mkdir -p merged/sample/addons/godot-onnx
           cp -r art-linux/* merged/sample/
           cp art-windows/addons/godot-onnx/libgodot_onnx.dll merged/sample/addons/godot-onnx/ 2>/dev/null || true
           cp art-macos/addons/godot-onnx/libgodot_onnx.dylib merged/sample/addons/godot-onnx/ 2>/dev/null || true
+          cp art-android/addons/godot-onnx/libgodot_onnx.arm64-v8a.so merged/sample/addons/godot-onnx/ 2>/dev/null || true
+          cp art-ios/addons/godot-onnx/libgodot_onnx.ios.arm64.dylib merged/sample/addons/godot-onnx/ 2>/dev/null || true
           ls -la merged/sample/addons/godot-onnx/
 
       - name: Upload merged sample project
