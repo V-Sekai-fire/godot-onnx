@@ -15,8 +15,6 @@ android.release.arm32 = "res://addons/godot-onnx/libgodot_onnx.armeabi-v7a.so"
 android.release.x86_64 = "res://addons/godot-onnx/libgodot_onnx.x86_64.so"
 android.release.x86_32 = "res://addons/godot-onnx/libgodot_onnx.x86.so"
 ios.release.arm64 = "res://addons/godot-onnx/libgodot_onnx.ios.arm64.dylib"
-ios.release.simulator.arm64 = "res://addons/godot-onnx/libgodot_onnx.ios.sim.arm64.dylib"
-ios.release.simulator.x86_64 = "res://addons/godot-onnx/libgodot_onnx.ios.sim.x86_64.dylib"
 
 [dependencies]
 
@@ -29,5 +27,3 @@ android.release.arm32 = []
 android.release.x86_64 = []
 android.release.x86_32 = []
 ios.release.arm64 = []
-ios.release.simulator.arm64 = []
-ios.release.simulator.x86_64 = []
