@@ -212,8 +212,22 @@ jobs:
         uses: mymindstorm/setup-emsdk@v14
         with:
           version: "latest"
+      - name: Download V-Sekai Godot (for API generation)
+        run: |
+          curl -sL -o v-sekai-godot.zip "https://github.com/V-Sekai/world-godot/releases/download/latest.v-sekai-editor-281/v-sekai-godot-linuxbsd.zip"
+          unzip -q v-sekai-godot.zip
+          GODOT_BIN=$(find . -maxdepth 4 -type f \( -name 'Godot*' -o -name 'godot*' \) 2>/dev/null | head -1)
+          if [ -z "$GODOT_BIN" ]; then GODOT_BIN=$(find . -maxdepth 4 -type f -executable 2>/dev/null | head -1); fi
+          if [ -n "$GODOT_BIN" ]; then
+            GODOT_BIN=$(realpath "$GODOT_BIN")
+            chmod +x "$GODOT_BIN" 2>/dev/null || true
+            echo "GODOT4_BIN=$GODOT_BIN" >> $GITHUB_ENV
+            echo "GODOT4_BIN=$GODOT_BIN"
+          else
+            echo "::warning::No Godot binary found in zip; wasm build may fail if gdext requires GODOT4_BIN"
+          fi
       - name: Build (wasm32)
-        run: cargo build --release --target wasm32-unknown-emscripten
+        run: cargo build --release --target wasm32-unknown-emscripten --no-default-features
       - name: Prepare artifact
         run: |
           mkdir -p sample/addons/godot-onnx
