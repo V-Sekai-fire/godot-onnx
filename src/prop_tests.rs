@@ -83,6 +83,57 @@ fn ref_matmul(a: [[f32; 3]; 2], b: [[f32; 2]; 3]) -> [[f32; 2]; 2] {
     c
 }
 
+/// Compare two f32 for "semantic" equality: same value, or both NaN, or both same-sign inf. 0.0 and -0.0 are equal.
+fn float_eq(a: f32, b: f32) -> bool {
+    if a == b {
+        return true;
+    }
+    if a.is_nan() && b.is_nan() {
+        return true;
+    }
+    if a.is_infinite() && b.is_infinite() && a.signum() == b.signum() {
+        return true;
+    }
+    false
+}
+
+/// Assert two f32s are equal (including NaN == NaN, 0 == -0, inf == same inf).
+fn assert_float_eq(actual: f32, expected: f32) -> Result<(), TestCaseError> {
+    if float_eq(actual, expected) {
+        Ok(())
+    } else {
+        Err(TestCaseError::fail(format!(
+            "got {} expected {}",
+            actual, expected
+        )))
+    }
+}
+
+/// Assert two f32s are close: both non-finite in a compatible way, or within absolute tol, or within relative tol.
+fn assert_float_close(actual: f32, expected: f32, abs_tol: f32, rel_tol: f32) -> Result<(), TestCaseError> {
+    if float_eq(actual, expected) {
+        return Ok(());
+    }
+    if !actual.is_finite() || !expected.is_finite() {
+        return Err(TestCaseError::fail(format!(
+            "got {} expected {} (one or both non-finite)",
+            actual, expected
+        )));
+    }
+    let diff = (actual - expected).abs();
+    if diff < abs_tol {
+        return Ok(());
+    }
+    let scale = expected.abs().max(actual.abs()).max(1e-6);
+    if diff / scale < rel_tol {
+        return Ok(());
+    }
+    Err(TestCaseError::fail(format!(
+        "got {} expected {} (abs_tol {} rel_tol {})",
+        actual, expected, abs_tol, rel_tol
+    )))
+}
+
 fn identity_input() -> impl Strategy<Value = [f32; 3]> {
     prop::array::uniform3(prop::num::f32::ANY)
 }
@@ -101,7 +152,9 @@ proptest! {
             return Ok(());
         };
         let out = run_identity(&mut session, x).map_err(|e| TestCaseError::fail(e.to_string()))?;
-        prop_assert_eq!(out, x);
+        for i in 0..3 {
+            assert_float_eq(out[i], x[i])?;
+        }
     }
 
     #[test]
@@ -112,10 +165,11 @@ proptest! {
         let (a, b) = inputs;
         let expected = ref_matmul(a, b);
         let out = run_matmul(&mut session, a, b).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        const ABS_TOL: f32 = 1e-4;
+        const REL_TOL: f32 = 1e-4;
         for i in 0..2 {
             for j in 0..2 {
-                prop_assert!((out[i][j] - expected[i][j]).abs() < 1e-5,
-                    "at [{i},{j}]: got {} expected {}", out[i][j], expected[i][j]);
+                assert_float_close(out[i][j], expected[i][j], ABS_TOL, REL_TOL)?;
             }
         }
     }

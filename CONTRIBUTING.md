@@ -25,6 +25,7 @@ Thanks for your interest in contributing. This document covers how to get set up
    pip install onnx
    python create_identity_onnx.py
    python create_matmul_onnx.py
+   python create_benchmark_onnx.py
    ```
 
 ## Running tests

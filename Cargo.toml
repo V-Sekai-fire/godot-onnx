@@ -11,6 +11,14 @@ godot = { git = "https://github.com/godot-rust/gdext.git", features = ["register
 ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
 ndarray = "0.17"
 
+# Linux: WebGPU execution provider (Dawn)
+[target.'cfg(target_os = "linux")'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "webgpu"] }
+
+# Windows: DirectML execution provider
+[target.'cfg(target_os = "windows")'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "directml"] }
+
 # macOS: CoreML execution provider
 [target.'cfg(target_os = "macos")'.dependencies]
 ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }

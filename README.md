@@ -6,7 +6,7 @@ Rust GDExtension for Godot 4 that runs ONNX models using [ort](https://github.co
 
 - **OnnxModule** (Resource): load ONNX from `res://` or `user://`, run inference with `call_module`.
 - **OnnxTensor** (RefCounted): create from `PackedFloat32Array`/`PackedByteArray` + shape; read with `get_data()` / `get_dimension()`.
-- **WebGPU EP** (optional): GPU acceleration via Dawn; disable in `Cargo.toml` for CPU only.
+- **Acceleration:** Linux (WebGPU via Dawn), Windows (DirectML), macOS/iOS (CoreML); Android/other use CPU.
 - **Property tests**: [proptest](https://docs.rs/proptest) for identity/matmul (no Godot required).
 
 ## Quick start
@@ -28,6 +28,7 @@ Open `sample/` as a Godot project and run the main scene. With identity and matm
 ```
 Identity output: [1.0, 2.0, 3.0] dim: [3]
 MatMul output dim: [2, 2] data: [22.0, 28.0, 49.0, 64.0]
+Benchmark: 100 runs in X.XX ms (X.XXX ms/run) — lower = accelerated
 ```
 
 ## Documentation

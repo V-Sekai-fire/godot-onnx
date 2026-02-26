@@ -12,7 +12,7 @@ env:
   DAWN_COMMIT: 536c572abab2602db0b652eda401ebd01e046c11
 
 jobs:
-  # --- Install Dawn for desktop Linux/Windows (ort WebGPU EP) ---
+  # --- Install Dawn for Linux only (ort WebGPU EP); Windows uses DirectML ---
   dawn-linux:
     name: "Dawn: Linux"
     runs-on: ubuntu-latest
@@ -32,31 +32,11 @@ jobs:
           path: dawn-install
           key: dawn-linux-${{ env.DAWN_COMMIT }}
 
-  dawn-windows:
-    name: "Dawn: Windows"
-    runs-on: windows-latest
-    steps:
-      - name: Download Dawn (windows-latest Release)
-        run: |
-          $asset = "Dawn-$env:DAWN_COMMIT-windows-latest-Release.tar.gz"
-          Invoke-WebRequest -Uri "https://github.com/google/dawn/releases/download/$env:DAWN_RELEASE_TAG/$asset" -OutFile dawn.tar.gz -UseBasicParsing
-      - name: Install Dawn
-        run: |
-          New-Item -ItemType Directory -Force -Path dawn-install | Out-Null
-          tar -xzf dawn.tar.gz -C dawn-install
-          Get-ChildItem dawn-install -Recurse | Select-Object -First 25
-      - name: Cache Dawn
-        uses: actions/cache/save@v4
-        with:
-          path: dawn-install
-          key: dawn-windows-${{ env.DAWN_COMMIT }}
-          enableCrossOsArchive: true
-
-  # --- Desktop: test, build, per-OS artifact + merged artifact (Dawn only for Linux/Windows ort WebGPU) ---
+  # --- Desktop: Linux (WebGPU+Dawn), Windows (DirectML), macOS (CoreML) ---
   build-and-test:
     name: "Build: Desktop (${{ matrix.os }})"
     runs-on: ${{ matrix.os }}
-    needs: [dawn-linux, dawn-windows]
+    needs: [dawn-linux]
     strategy:
       fail-fast: false
       matrix:
@@ -67,33 +47,22 @@ jobs:
 
       - name: Set Dawn cache key
         id: dawn
-        if: matrix.os != 'macos-latest'
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
-        run: |
-          case "${{ matrix.os }}" in
-            ubuntu-latest) echo "key=dawn-linux-${{ env.DAWN_COMMIT }}" >> $GITHUB_OUTPUT ;;
-            windows-latest) echo "key=dawn-windows-${{ env.DAWN_COMMIT }}" >> $GITHUB_OUTPUT ;;
-            *) echo "key=dawn-linux-${{ env.DAWN_COMMIT }}" >> $GITHUB_OUTPUT ;;
-          esac
+        run: echo "key=dawn-linux-${{ env.DAWN_COMMIT }}" >> $GITHUB_OUTPUT
 
       - name: Restore Dawn
-        if: matrix.os != 'macos-latest'
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/cache/restore@v4
         with:
           path: dawn-install
           key: ${{ steps.dawn.outputs.key }}
 
-      - name: Set Dawn env for ort
-        if: matrix.os != 'macos-latest' && runner.os != 'Windows'
+      - name: Set Dawn env for ort (Linux WebGPU)
+        if: matrix.os == 'ubuntu-latest'
         run: |
           echo "DAWN_ROOT=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
           echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/dawn-install" >> $GITHUB_ENV
-
-      - name: Set Dawn env for ort (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          echo "DAWN_ROOT=$env:GITHUB_WORKSPACE\dawn-install" >> $env:GITHUB_ENV
-          echo "CMAKE_PREFIX_PATH=$env:GITHUB_WORKSPACE\dawn-install" >> $env:GITHUB_ENV
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -116,6 +85,7 @@ jobs:
           cd sample/models
           python create_identity_onnx.py
           python create_matmul_onnx.py
+          python create_benchmark_onnx.py
         shell: bash
 
       - name: Install Janet
