@@ -9,7 +9,7 @@ pub mod module;
 pub mod model_data;
 pub mod tensor;
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod prop_tests;
 
 pub use module::OnnxModule;
