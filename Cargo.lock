@@ -369,7 +369,6 @@ dependencies = [
  "ort",
  "ort-web",
  "proptest",
- "smallvec",
  "wasm-bindgen-futures",
 ]
 

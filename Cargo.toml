@@ -7,7 +7,9 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-godot = { git = "https://github.com/godot-rust/gdext.git", features = ["experimental-threads", "register-docs"] }
+# Don't add experimental-threads here: Cargo unifies features across edges, so wasm32 would get it
+# and godot-ffi would use multi_threaded (RefCell not Sync). Enable via default "threads" feature.
+godot = { git = "https://github.com/godot-rust/gdext.git", features = ["register-docs"] }
 ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
 ndarray = "0.17"
 
@@ -31,7 +33,9 @@ ort-web = "0.1"
 wasm-bindgen-futures = "0.4"
 
 [features]
-default = ["godot/api-4-5"]
+default = ["godot/api-4-5", "threads"]
+# Multi-threaded gdext binding (desktop). Omit for wasm32 so godot-ffi uses single-threaded path.
+threads = ["godot/experimental-threads"]
 # Build for Godot compiled with precision=double. Requires GODOT4_BIN pointing to that binary. Use: cargo build --release --no-default-features --features double-precision
 double-precision = ["godot/api-custom", "godot/double-precision"]
 
