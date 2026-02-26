@@ -11,7 +11,7 @@ Rust GDExtension for Godot 4 that runs ONNX models using [ort](https://github.co
 
 ## Quick start
 
-**Requirements:** Rust (stable), Godot 4.4+. On Windows: MSVC toolchain (see [Build](docs/BUILD.md)).
+**Requirements:** Rust (stable), Godot 4.6+. On Windows: MSVC toolchain (see [Build](docs/BUILD.md)).
 
 ```powershell
 # Windows

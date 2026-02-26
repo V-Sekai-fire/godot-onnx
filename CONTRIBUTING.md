@@ -8,7 +8,7 @@ Thanks for your interest in contributing. This document covers how to get set up
 
 2. **Install requirements**
    - [Rust](https://rustup.rs/) (stable)
-   - Godot 4.4+ (for running the sample)
+   - Godot 4.6+ (for running the sample)
    - **Windows only**: MSVC (Visual Studio Build Tools with C++). Use “Developer PowerShell” or ensure `link.exe` is in `PATH`.
 
 3. **Build**

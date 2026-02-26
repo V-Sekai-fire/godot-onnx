@@ -57,4 +57,4 @@ See [Scenes](SCENES.md#generating-inference-images-validate-vs-rust-tests).
 ## CI
 
 - **Rust:** `cargo test` runs in the desktop build job (after generating identity/matmul/benchmark). Scene model tests skip if those ONNX files are not present.
-- **Godot:** On Ubuntu, the workflow installs Godot 4.2, runs **Godot inference tests** (`res://scripts/test_inference.gd`); the job fails if the script exits non-zero (e.g. identity/matmul missing or inference error). Then it optionally downloads scene models, runs the export script, and uploads inference images as an artifact.
+- **Godot:** On Ubuntu, the workflow installs Godot 4.6, runs **Godot inference tests** (`res://scripts/test_inference.gd`); the job fails if the script exits non-zero (e.g. identity/matmul missing or inference error). Then it optionally downloads scene models, runs the export script, and uploads inference images as an artifact.
