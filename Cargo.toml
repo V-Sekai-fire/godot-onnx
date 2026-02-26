@@ -7,29 +7,27 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# No experimental-threads here so wasm32 build (other godot edge) doesn't unify it → single-threaded godot-ffi.
 godot = { git = "https://github.com/godot-rust/gdext.git", features = ["register-docs"] }
-# Tract-only: ort with alternative-backend (no ONNX Runtime C++); ort-tract for all platforms.
-ort = { version = "2.0.0-rc.11", default-features = false, features = ["ndarray", "alternative-backend"] }
-ort-tract = "0.2"
+ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
 ndarray = "0.17"
 
-# Web (wasm32): godot single-threaded; tract runs in wasm. Same ort/ort-tract as base.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-godot = { git = "https://github.com/godot-rust/gdext.git", default-features = false, features = ["api-custom", "experimental-wasm-nothreads", "lazy-function-tables"] }
-wasm-bindgen-futures = "0.4"
+# macOS: CoreML execution provider
+[target.'cfg(target_os = "macos")'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
+
+# iOS: CoreML only
+[target.'cfg(target_os = "ios")'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
+
+# Android: CPU + NNAPI
+[target.'cfg(target_os = "android")'.dependencies]
+ort = { version = "2.0.0-rc.11", features = ["ndarray", "nnapi"] }
 
 [features]
 default = ["godot/api-4-5", "threads"]
-# Multithreaded gdext binding (desktop). Only this path is explicitly handled; wasm32 uses --no-default-features (single-threaded).
 threads = ["godot/experimental-threads"]
-# Build for Godot compiled with precision=double. Requires GODOT4_BIN pointing to that binary. Use: cargo build --release --no-default-features --features double-precision
+# Build for Godot compiled with precision=double. Requires GODOT4_BIN. Use: cargo build --release --no-default-features --features double-precision
 double-precision = ["godot/api-custom", "godot/double-precision"]
-
-# Use ort from git main so wasm builds (smallvec 1.15 fix not in crates.io rc.11).
-[patch.crates-io]
-ort = { git = "https://github.com/pykeio/ort", branch = "main" }
-ort-sys = { git = "https://github.com/pykeio/ort", branch = "main" }
 
 [dev-dependencies]
 proptest = "1.5"

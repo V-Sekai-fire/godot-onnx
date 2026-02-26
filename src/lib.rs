@@ -1,6 +1,6 @@
 // Copyright (c) 2026-present K. S. Ernest (iFire) Lee & godot-onnx contributors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-// GDExtension entry point for Godot ONNX (ort + tract backend)
+// GDExtension entry point for Godot ONNX (ort)
 // Reuses patterns from M:\iree.gd (IREEModule / IREETensor API)
 
 use godot::init::gdextension;

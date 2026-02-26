@@ -53,13 +53,11 @@ Open the `sample/` folder as a Godot project with **official Godot 4.6** and run
 - **Float only:** `cargo build --release` then copy the library into `sample/addons/godot-onnx/` as `libgodot_onnx.*`.
 - **Doubles only:** Set `GODOT4_BIN`, then `cargo build --release --no-default-features --features double-precision` and copy as `libgodot_onnx_doubles.*`.
 
-## Web, Android, iOS (experimental)
+## Android, iOS (experimental)
 
-The `.gdextension` file includes library entries for **web** (wasm32), **Android** (arm64-v8a, armeabi-v7a, x86_64, x86), and **iOS** (device arm64, simulator arm64/x86_64). Building for these platforms requires:
-
-- **Web:** Rust target `wasm32-unknown-emscripten`, Emscripten SDK, and **`GODOT4_BIN`** pointing to the V-Sekai world-godot editor (see **API generation** above) so gdext can generate bindings. Build with `cargo build --release --target wasm32-unknown-emscripten --no-default-features`. **Windows:** load Emscripten with `& "%USERPROFILE%\scoop\apps\emscripten\current\emsdk_env.ps1"` if you need emcc. Godot export templates must be built with `dlink_enabled=yes` for GDExtension on web. **Backend:** All platforms use **ort + ort-tract** (tract-only; no ONNX Runtime C++). `ort` is patched to git `main` for wasm (see [docs/WEB_BACKENDS.md](WEB_BACKENDS.md)).
+The `.gdextension` file includes library entries for **Android** (arm64-v8a, armeabi-v7a, x86_64, x86) and **iOS** (device arm64, simulator arm64/x86_64). **Web (wasm32) is not supported.**
 
 - **Android:** Rust targets `aarch64-linux-android`, `armv7-linux-androideabi`, `i686-linux-android`, `x86_64-linux-android`, and Android NDK. Copy the resulting `.so` files into `sample/addons/godot-onnx/` as `libgodot_onnx.arm64-v8a.so`, `libgodot_onnx.armeabi-v7a.so`, etc.
 - **iOS:** Rust targets `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios` (macOS host with Xcode). Copy the `.dylib` files as `libgodot_onnx.ios.arm64.dylib`, `libgodot_onnx.ios.sim.arm64.dylib`, `libgodot_onnx.ios.sim.x86_64.dylib`.
 
-The same CI workflow (`.github/workflows/ci.yml`) runs desktop builds plus optional jobs for web, Android, and iOS; those jobs use `continue-on-error` because **ort** may not provide prebuilt binaries for these targets. See the workflow file for exact commands and artifact layout.
+The CI workflow (`.github/workflows/ci.yml`) runs desktop builds plus optional jobs for Android and iOS; those jobs use `continue-on-error` because **ort** may not provide prebuilt binaries for these targets. See the workflow file for exact commands and artifact layout.

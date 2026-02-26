@@ -1,25 +1,25 @@
 // Copyright (c) 2026-present K. S. Ernest (iFire) Lee & godot-onnx contributors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-// ONNXModule: Resource that loads an ONNX model and runs inference via ort + tract (tract-only backend).
+// ONNXModule: Resource that loads an ONNX model and runs inference via ort (ONNX Runtime).
 // API matches IREEModule: load(path), unload(), call_module(func_name, args) -> Array of ONNXTensor.
-// On wasm32 load() spawns a future to build session; desktop loads synchronously.
 
 use godot::builtin::{GString, PackedByteArray, VarArray};
 use godot::classes::{FileAccess, Resource, ResourceLoader};
 use godot::prelude::*;
 use ndarray::ArrayD;
+use ort::ep::{self, ExecutionProviderDispatch};
 use ort::session::Session;
 use ort::session::builder::SessionBuilder;
 use ort::session::SessionOutputs;
 use ort::value::{DynValue, Tensor};
-use std::sync::{Arc, Once};
+use std::io::Write;
+use std::sync::Arc;
 
 use crate::model_data::OnnxModelData;
 use crate::sync_cell::{SyncCell, with_mut};
 use crate::tensor::OnnxTensor;
 
-/// Shared session store so wasm32 async load can set the session from a spawned future.
-/// Uses SyncCell: Mutex (Sync) when feature "threads", RefCell when not (e.g. wasm32).
+/// Shared session store.
 #[derive(Clone)]
 pub struct SessionStore(Arc<SyncCell<Option<Session>>>);
 
@@ -29,14 +29,37 @@ impl Default for SessionStore {
     }
 }
 
-static TRACT_INIT: Once = Once::new();
-
-/// Build session using tract backend (CPU everywhere; no ONNX Runtime C++).
+/// Build session with platform execution providers: CoreML (macOS), WebGPU (Linux/Windows), NNAPI (Android), CPU fallback.
 fn session_builder() -> ort::Result<SessionBuilder> {
-    TRACT_INIT.call_once(|| {
-        ort::set_api(ort_tract::api());
-    });
-    Session::builder()
+    #[cfg(target_os = "macos")]
+    {
+        let coreml_ep: ExecutionProviderDispatch = ep::CoreML::default().into();
+        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
+        Session::builder()
+            .and_then(|b: SessionBuilder| b.with_execution_providers([coreml_ep, cpu_ep]))
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
+        Session::builder()
+            .and_then(|b: SessionBuilder| b.with_execution_providers([cpu_ep]))
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    {
+        let webgpu_ep: ExecutionProviderDispatch = ep::WebGPU::default().into();
+        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
+        Session::builder()
+            .and_then(|b: SessionBuilder| b.with_execution_providers([webgpu_ep, cpu_ep]))
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "android")))]
+    {
+        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
+        Session::builder()
+            .and_then(|b: SessionBuilder| b.with_execution_providers([cpu_ep]))
+    }
 }
 
 /// Resource that loads an ONNX model from a Godot path (`res://` or `user://`) and runs inference via ONNX Runtime.
@@ -51,8 +74,7 @@ pub struct OnnxModule {
 
 #[godot_api]
 impl OnnxModule {
-    /// Load ONNX model from Godot path (res:// or user://). Uses ResourceLoader so imported .onnx files (engine import cache) are loaded; falls back to raw file read for user:// or unimported paths.
-    /// On web (wasm32) this starts an async load; poll [is_loaded] or wait a frame for the session to be ready.
+    /// Load ONNX model from Godot path (res:// or user://). Uses ResourceLoader for imported .onnx; falls back to FileAccess for user:// or unimported paths.
     #[func]
     pub fn load(&mut self, path: GString) {
         let path_str = path.to_string();
@@ -62,48 +84,27 @@ impl OnnxModule {
             godot_error!("OnnxModule.load: empty or missing file: {}", path_str);
             return;
         }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let bytes_slice = bytes.as_slice();
+        let bytes_slice = bytes.as_slice();
+        let temp_path = std::env::temp_dir().join("godot_onnx_model.onnx");
+        if let Ok(mut f) = std::fs::File::create(&temp_path) {
+            let _ = f.write_all(bytes_slice);
+            drop(f);
             let builder = session_builder();
-            match builder.and_then(|b: SessionBuilder| b.commit_from_memory(bytes_slice)) {
+            match builder.and_then(|b: SessionBuilder| b.commit_from_file(&temp_path)) {
                 Ok(session) => {
+                    let _ = std::fs::remove_file(&temp_path);
                     with_mut(&self.path, |p| *p = path.clone());
                     with_mut(&self.session.0, |s| *s = Some(session));
                     self.base_mut().notify_property_list_changed();
                     self.base_mut().emit_changed();
                 }
                 Err(e) => {
+                    let _ = std::fs::remove_file(&temp_path);
                     godot_error!("OnnxModule.load: ort error: {}", e);
                 }
             }
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            use wasm_bindgen_futures::spawn_local;
-            let bytes_vec: Vec<u8> = bytes.as_slice().to_vec();
-            let session_store = self.session.clone();
-            let path_clone = path.clone();
-            spawn_local(async move {
-                let builder = match session_builder() {
-                    Ok(b) => b,
-                    Err(e) => {
-                        godot_error!("OnnxModule.load (web): session_builder failed: {}", e);
-                        return;
-                    }
-                };
-                let session = match builder.commit_from_memory(&bytes_vec) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        godot_error!("OnnxModule.load (web): commit_from_memory failed: {}", e);
-                        return;
-                    }
-                };
-                with_mut(&session_store.0, |s| *s = Some(session));
-            });
-            with_mut(&self.path, |p| *p = path.clone());
+        } else {
+            godot_error!("OnnxModule.load: cannot create temp file");
         }
     }
 
@@ -137,7 +138,6 @@ impl OnnxModule {
     }
 
     /// Run inference. func_name is ignored (ONNX has one graph); args are input tensors in model order.
-    /// On web (wasm32) only run_async is available; call_module returns empty — use call_module_async when implemented.
     #[func]
     pub fn call_module(&mut self, _func_name: GString, args: VarArray) -> VarArray {
         with_mut(&self.session.0, |session_opt| {
@@ -154,15 +154,6 @@ impl OnnxModule {
             );
             return VarArray::new();
         }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            godot_error!("OnnxModule.call_module: on web use call_module_async (sync run not supported)");
-            return VarArray::new();
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
         let mut input_tensors: Vec<DynValue> = Vec::with_capacity(input_count);
         for i in 0..args.len() {
             let Some(ref arg) = args.get(i) else { continue };
@@ -192,23 +183,14 @@ impl OnnxModule {
                 }
             }
         }
-        // Build inputs: ort accepts named map. Use ordered inputs by name.
-        let input_names: Vec<String> = session
-            .inputs()
-            .iter()
-            .map(|o| o.name().to_string())
-            .collect();
-        let inputs_vec: Vec<(String, DynValue)> = input_names
+        let input_names: Vec<String> = session.inputs().iter().map(|o| o.name().to_string()).collect();
+        let inputs_map: std::collections::HashMap<String, DynValue> = input_names
             .iter()
             .zip(input_tensors.into_iter())
-            .map(|(name, v): (&String, DynValue)| (name.clone(), v))
+            .map(|(name, v)| (name.clone(), v))
             .collect();
-        let output_names: Vec<String> = session
-            .outputs()
-            .iter()
-            .map(|o| o.name().to_string())
-            .collect();
-        let run_result = session.run(inputs_vec);
+        let output_names: Vec<String> = session.outputs().iter().map(|o| o.name().to_string()).collect();
+        let run_result = session.run(inputs_map);
         let outputs: SessionOutputs<'_> = match run_result {
             Ok(out) => out,
             Err(e) => {
@@ -232,7 +214,6 @@ impl OnnxModule {
             result.push(out_tensor.to_variant().to_godot());
         }
         result
-        }
         })
     }
 }
