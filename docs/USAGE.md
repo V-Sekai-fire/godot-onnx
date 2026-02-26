@@ -48,3 +48,15 @@ python create_matmul_onnx.py     # writes matmul.onnx
 ```
 
 Then run the Godot sample scene; it will load these from `res://models/...` (project root for the sample is `sample/`, so `res://models/` is `sample/models/`).
+
+## Expected output (sample scene)
+
+When the sample runs successfully, the Godot console shows:
+
+```
+Identity output: [1.0, 2.0, 3.0] dim: [3]
+MatMul output dim: [2, 2] data: [22.0, 28.0, 49.0, 64.0]
+```
+
+- **Identity**: input `[1, 2, 3]` is passed through unchanged; shape `[3]`.
+- **MatMul**: sample uses `A` [2×3] and `B` [3×2]; result `Y` is [2×2] with values `[22, 28, 49, 64]`.

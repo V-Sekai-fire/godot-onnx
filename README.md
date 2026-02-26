@@ -23,7 +23,12 @@ Rust GDExtension for Godot 4 that runs ONNX models using [ort](https://github.co
 ./misc/build.sh
 ```
 
-Open `sample/` as a Godot project and run the main scene.
+Open `sample/` as a Godot project and run the main scene. With identity and matmul models in `sample/models/`, the console should show:
+
+```
+Identity output: [1.0, 2.0, 3.0] dim: [3]
+MatMul output dim: [2, 2] data: [22.0, 28.0, 49.0, 64.0]
+```
 
 ## Documentation
 
