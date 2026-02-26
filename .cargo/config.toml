@@ -2,3 +2,9 @@
 # not for x86_64-pc-windows-gnu. So we use the default (MSVC) target.
 # Ensure "Build Tools for Visual Studio" with C++ is installed and that
 # you build from "Developer PowerShell" or a shell where link.exe is in PATH.
+
+# Android (aarch64): use NDK clang as linker so cross-compilation from x86_64 host works.
+# Set ANDROID_NDK_ROOT (or NDK_HOME) and ensure $NDK/toolchains/llvm/prebuilt/<host>/bin is on PATH,
+# or set CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER to the full path to aarch64-linux-android21-clang.
+[target.aarch64-linux-android]
+linker = "aarch64-linux-android21-clang"

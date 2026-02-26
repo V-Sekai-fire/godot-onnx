@@ -213,7 +213,14 @@ jobs:
         with:
           ndk-version: r26d
       - name: Build Android (arm64-v8a, Meta Quest)
-        run: cargo build --release --target aarch64-linux-android
+        run: |
+          NDK_BIN="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          if [ -x "$NDK_BIN/aarch64-linux-android21-clang" ]; then
+            export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android21-clang"
+          elif [ -x "$NDK_BIN/aarch64-linux-android26-clang" ]; then
+            export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android26-clang"
+          fi
+          cargo build --release --target aarch64-linux-android
       - name: Prepare artifact
         run: |
           mkdir -p sample/addons/godot-onnx
