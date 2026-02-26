@@ -24,7 +24,7 @@ The script builds the **float** variant and, if `GODOT4_BIN` is set, the **doubl
 
 ## API generation (GODOT4_BIN)
 
-Builds that use gdext’s **api-custom** (Web/wasm, or double-precision) need a Godot 4 binary at build time so gdext can generate the correct API. Use the **V-Sekai world-godot** editor for that:
+Builds that use gdext’s **api-custom** (e.g. double-precision) need a Godot 4 binary at build time so gdext can generate the correct API. Use the **V-Sekai world-godot** editor for that:
 
 - **Download:** [V-Sekai/world-godot — latest.v-sekai-editor-281](https://github.com/V-Sekai/world-godot/releases/tag/latest.v-sekai-editor-281)  
   Get the editor archive for your OS (e.g. `v-sekai-godot-windows.zip`, `v-sekai-godot-linuxbsd.zip`, `v-sekai-godot-macos.zip`), extract it, then set **`GODOT4_BIN`** to the executable inside (e.g. `Godot_v4.x_win64.exe` or `Godot.x86_64`).
@@ -55,7 +55,7 @@ Open the `sample/` folder as a Godot project with **official Godot 4.6** and run
 
 ## Android, iOS (experimental)
 
-The `.gdextension` file includes library entries for **Android** (arm64-v8a only, e.g. Meta Quest) and **iOS** (device arm64, simulator arm64/x86_64). **Web (wasm32) is not supported.**
+The `.gdextension` file includes library entries for **Android** (arm64-v8a only, e.g. Meta Quest) and **iOS** (device arm64, simulator arm64/x86_64).
 
 - **Android (arm64 only):** Rust target `aarch64-linux-android` and Android NDK. Copy the resulting `.so` into `sample/addons/godot-onnx/` as `libgodot_onnx.arm64-v8a.so`.
 - **iOS:** Rust targets `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios` (macOS host with Xcode). Copy the `.dylib` files as `libgodot_onnx.ios.arm64.dylib`, `libgodot_onnx.ios.sim.arm64.dylib`, `libgodot_onnx.ios.sim.x86_64.dylib`.

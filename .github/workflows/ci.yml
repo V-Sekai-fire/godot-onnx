@@ -191,75 +191,7 @@ jobs:
           path: merged/sample/
           if-no-files-found: error
 
-  # --- Web / Android / iOS (optional; continue-on-error if ort has no prebuilt for target) ---
-  build-web:
-    name: "Build: Web"
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-emscripten
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: .
-      - name: Install Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: "latest"
-      - name: Set bindgen env for wasm32 (Emscripten sysroot + libclang)
-        run: |
-          # godot-ffi runs bindgen for wasm32; bindgen was using host /usr/include and failed.
-          # Use Emscripten sysroot and libclang so bindgen parses headers for wasm32.
-          if [ -z "$EMSDK" ]; then
-            EMSDK=$(dirname $(dirname $(dirname $(which emcc))))
-            echo "EMSDK=$EMSDK" >> $GITHUB_ENV
-          fi
-          SYSROOT=$(emcc -print-sysroot 2>/dev/null || echo "$EMSDK/upstream/emscripten/cache/sysroot")
-          echo "BINDGEN_EXTRA_CLANG_ARGS_wasm32_unknown_emscripten=--sysroot=$SYSROOT --target=wasm32-unknown-emscripten" >> $GITHUB_ENV
-          # Prefer Emscripten-bundled libclang so bindgen uses the right toolchain
-          for libdir in "$EMSDK/upstream/lib" "$EMSDK/upstream/llvm/lib"; do
-            if [ -d "$libdir" ] && ls "$libdir"/libclang*.so* 1>/dev/null 2>&1; then
-              echo "LIBCLANG_PATH=$libdir" >> $GITHUB_ENV
-              break
-            fi
-          done
-          echo "SYSROOT=$SYSROOT" >> $GITHUB_ENV
-          echo "Set BINDGEN_EXTRA_CLANG_ARGS_wasm32_unknown_emscripten and LIBCLANG_PATH (if found)"
-      - name: Download V-Sekai Godot (for API generation)
-        run: |
-          curl -sL -o v-sekai-godot.zip "https://github.com/V-Sekai/world-godot/releases/download/latest.v-sekai-editor-281/v-sekai-godot-linuxbsd.zip"
-          unzip -q v-sekai-godot.zip
-          GODOT_BIN=$(find . -maxdepth 4 -type f \( -name 'Godot*' -o -name 'godot*' \) 2>/dev/null | head -1)
-          if [ -z "$GODOT_BIN" ]; then GODOT_BIN=$(find . -maxdepth 4 -type f -executable 2>/dev/null | head -1); fi
-          if [ -n "$GODOT_BIN" ]; then
-            GODOT_BIN=$(realpath "$GODOT_BIN")
-            chmod +x "$GODOT_BIN" 2>/dev/null || true
-            echo "GODOT4_BIN=$GODOT_BIN" >> $GITHUB_ENV
-            echo "GODOT4_BIN=$GODOT_BIN"
-          else
-            echo "::warning::No Godot binary found in zip; wasm build may fail if gdext requires GODOT4_BIN"
-          fi
-      - name: Build (wasm32)
-        run: cargo build --release --target wasm32-unknown-emscripten --no-default-features
-      - name: Prepare artifact
-        run: |
-          mkdir -p sample/addons/godot-onnx
-          cp target/wasm32-unknown-emscripten/release/libgodot_onnx.wasm sample/addons/godot-onnx/ 2>/dev/null || \
-          cp target/wasm32-unknown-emscripten/release/godot_onnx.wasm sample/addons/godot-onnx/libgodot_onnx.wasm 2>/dev/null || true
-          ls -la sample/addons/godot-onnx/
-      - name: Upload web artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-onnx-sample-Web
-          path: sample/
-
+  # --- Android / iOS (optional; continue-on-error if ort has no prebuilt for target) ---
   build-android:
     name: "Build: Android"
     runs-on: ubuntu-latest
