@@ -9,27 +9,14 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # No experimental-threads here so wasm32 build (other godot edge) doesn't unify it → single-threaded godot-ffi.
 godot = { git = "https://github.com/godot-rust/gdext.git", features = ["register-docs"] }
-# 2.0.0-rc.11 for desktop; wasm uses same + ort-tract. Patch to git main fixes smallvec 1.15 wasm build.
-ort = { version = "2.0.0-rc.11", features = ["ndarray"] }
-ndarray = "0.17"
-
-# macOS: add CoreML execution provider
-[target.'cfg(target_os = "macos")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
-
-# iOS: CoreML only (no WebGPU/Dawn to avoid linking webgpu_dawn)
-[target.'cfg(target_os = "ios")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "coreml"] }
-
-# Android: CPU only (no WebGPU/Dawn prebuilts on pyke CDN; use build-dawn job to build Dawn if needed)
-[target.'cfg(target_os = "android")'.dependencies]
-ort = { version = "2.0.0-rc.11", features = ["ndarray", "nnapi"] }
-
-# Web (wasm32): ort-tract backend (pure Rust, CPU in wasm). Requires ort 2.0.0-rc.11; patch to git fixes smallvec.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-godot = { git = "https://github.com/godot-rust/gdext.git", default-features = false, features = ["api-custom", "experimental-wasm-nothreads", "lazy-function-tables"] }
+# Tract-only: ort with alternative-backend (no ONNX Runtime C++); ort-tract for all platforms.
 ort = { version = "2.0.0-rc.11", default-features = false, features = ["ndarray", "alternative-backend"] }
 ort-tract = "0.2"
+ndarray = "0.17"
+
+# Web (wasm32): godot single-threaded; tract runs in wasm. Same ort/ort-tract as base.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+godot = { git = "https://github.com/godot-rust/gdext.git", default-features = false, features = ["api-custom", "experimental-wasm-nothreads", "lazy-function-tables"] }
 wasm-bindgen-futures = "0.4"
 
 [features]
@@ -39,7 +26,7 @@ threads = ["godot/experimental-threads"]
 # Build for Godot compiled with precision=double. Requires GODOT4_BIN pointing to that binary. Use: cargo build --release --no-default-features --features double-precision
 double-precision = ["godot/api-custom", "godot/double-precision"]
 
-# Use ort from git main so wasm builds (smallvec 1.15 API fix not yet in crates.io rc.11).
+# Use ort from git main so wasm builds (smallvec 1.15 fix not in crates.io rc.11).
 [patch.crates-io]
 ort = { git = "https://github.com/pykeio/ort", branch = "main" }
 ort-sys = { git = "https://github.com/pykeio/ort", branch = "main" }

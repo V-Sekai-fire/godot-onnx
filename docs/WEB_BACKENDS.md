@@ -26,7 +26,4 @@ To use **ort-tract** on wasm you can:
 
 ## Current state in this repo
 
-- **Desktop:** `ort` 2.0.0-rc.10 with ndarray (and platform EPs: CoreML, WebGPU, NNAPI, etc.).
-- **Wasm:** `ort` 2.0.0-rc.10 with `alternative-backend` only; **no** `ort-web` or `ort-tract` yet, so wasm `load()` is stubbed and reports “wasm ONNX disabled”.
-
-To enable a wasm backend you can add the **ort-tract** (or ort-candle) path and, if needed, a `[patch.crates-io]` for `ort` to `git = "https://github.com/pykeio/ort", branch = "main"` so wasm builds succeed.
+- **All platforms:** **Tract-only.** `ort` 2.0.0-rc.11 with `alternative-backend` and **ort-tract**; no ONNX Runtime C++ (no CoreML, WebGPU, NNAPI). Models are loaded with `commit_from_memory`; inference runs on CPU (or in wasm via tract). `ort` is patched to git `main` so wasm builds (smallvec fix).

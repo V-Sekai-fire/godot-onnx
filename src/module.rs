@@ -1,20 +1,18 @@
 // Copyright (c) 2026-present K. S. Ernest (iFire) Lee & godot-onnx contributors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-// ONNXModule: Resource that loads an ONNX model and runs inference via ort.
+// ONNXModule: Resource that loads an ONNX model and runs inference via ort + tract (tract-only backend).
 // API matches IREEModule: load(path), unload(), call_module(func_name, args) -> Array of ONNXTensor.
-// On wasm32 we use ort-tract; load() spawns a future to init API and build session.
+// On wasm32 load() spawns a future to build session; desktop loads synchronously.
 
 use godot::builtin::{GString, PackedByteArray, VarArray};
 use godot::classes::{FileAccess, Resource, ResourceLoader};
 use godot::prelude::*;
 use ndarray::ArrayD;
-use ort::ep::{self, ExecutionProviderDispatch};
 use ort::session::Session;
 use ort::session::builder::SessionBuilder;
 use ort::session::SessionOutputs;
 use ort::value::{DynValue, Tensor};
-use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use crate::model_data::OnnxModelData;
 use crate::sync_cell::{SyncCell, with_mut};
@@ -31,37 +29,14 @@ impl Default for SessionStore {
     }
 }
 
-/// Build session with platform-appropriate execution providers: CoreML on macOS; WebGPU on Linux/Windows; CPU only on Android (Dawn built separately if needed).
+static TRACT_INIT: Once = Once::new();
+
+/// Build session using tract backend (CPU everywhere; no ONNX Runtime C++).
 fn session_builder() -> ort::Result<SessionBuilder> {
-    #[cfg(target_os = "macos")]
-    {
-        let coreml_ep: ExecutionProviderDispatch = ep::CoreML::default().into();
-        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
-        Session::builder()
-            .and_then(|b: SessionBuilder| b.with_execution_providers([coreml_ep, cpu_ep]))
-    }
-
-    #[cfg(target_os = "android")]
-    {
-        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
-        Session::builder()
-            .and_then(|b: SessionBuilder| b.with_execution_providers([cpu_ep]))
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
-    {
-        let webgpu_ep: ExecutionProviderDispatch = ep::WebGPU::default().into();
-        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
-        Session::builder()
-            .and_then(|b: SessionBuilder| b.with_execution_providers([webgpu_ep, cpu_ep]))
-    }
-
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "android")))]
-    {
-        let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
-        Session::builder()
-            .and_then(|b: SessionBuilder| b.with_execution_providers([cpu_ep]))
-    }
+    TRACT_INIT.call_once(|| {
+        ort::set_api(ort_tract::api());
+    });
+    Session::builder()
 }
 
 /// Resource that loads an ONNX model from a Godot path (`res://` or `user://`) and runs inference via ONNX Runtime.
@@ -91,26 +66,17 @@ impl OnnxModule {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let bytes_slice = bytes.as_slice();
-            let temp_path = std::env::temp_dir().join("godot_onnx_model.onnx");
-            if let Ok(mut f) = std::fs::File::create(&temp_path) {
-                let _ = f.write_all(bytes_slice);
-                drop(f);
-                let builder = session_builder();
-                match builder.and_then(|b: SessionBuilder| b.commit_from_file(&temp_path)) {
-                    Ok(session) => {
-                        let _ = std::fs::remove_file(&temp_path);
-                        with_mut(&self.path, |p| *p = path.clone());
-                        with_mut(&self.session.0, |s| *s = Some(session));
-                        self.base_mut().notify_property_list_changed();
-                        self.base_mut().emit_changed();
-                    }
-                    Err(e) => {
-                        let _ = std::fs::remove_file(&temp_path);
-                        godot_error!("OnnxModule.load: ort error: {}", e);
-                    }
+            let builder = session_builder();
+            match builder.and_then(|b: SessionBuilder| b.commit_from_memory(bytes_slice)) {
+                Ok(session) => {
+                    with_mut(&self.path, |p| *p = path.clone());
+                    with_mut(&self.session.0, |s| *s = Some(session));
+                    self.base_mut().notify_property_list_changed();
+                    self.base_mut().emit_changed();
                 }
-            } else {
-                godot_error!("OnnxModule.load: cannot create temp file");
+                Err(e) => {
+                    godot_error!("OnnxModule.load: ort error: {}", e);
+                }
             }
         }
 
@@ -121,7 +87,6 @@ impl OnnxModule {
             let session_store = self.session.clone();
             let path_clone = path.clone();
             spawn_local(async move {
-                ort::set_api(ort_tract::api());
                 let builder = match session_builder() {
                     Ok(b) => b,
                     Err(e) => {
@@ -233,7 +198,7 @@ impl OnnxModule {
             .iter()
             .map(|o| o.name().to_string())
             .collect();
-        let inputs_map: std::collections::HashMap<String, DynValue> = input_names
+        let inputs_vec: Vec<(String, DynValue)> = input_names
             .iter()
             .zip(input_tensors.into_iter())
             .map(|(name, v): (&String, DynValue)| (name.clone(), v))
@@ -243,7 +208,7 @@ impl OnnxModule {
             .iter()
             .map(|o| o.name().to_string())
             .collect();
-        let run_result = session.run(inputs_map);
+        let run_result = session.run(inputs_vec);
         let outputs: SessionOutputs<'_> = match run_result {
             Ok(out) => out,
             Err(e) => {
