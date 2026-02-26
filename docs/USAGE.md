@@ -24,7 +24,7 @@ if result.size() > 0:
 
 | Class          | Methods / static methods                                                                                                                       |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **OnnxModule** | `load(path)`, `unload()`, `is_loaded()`, `call_module(func_name, args)` → `Array` of `OnnxTensor`. `func_name` is ignored (single ONNX graph). |
+| **OnnxModule** | `load(path)`, `unload()`, `is_loaded()`, `get_execution_providers()` → `String`, `is_accelerated()` → `bool`, `call_module(func_name, args)` → `Array` of `OnnxTensor`. `func_name` is ignored (single ONNX graph). |
 | **OnnxTensor** | `OnnxTensor.from_float32s(float32s, dimension)`, `OnnxTensor.from_bytes(bytes, dimension)`, `get_data()`, `get_dimension()`, `is_captured()`.  |
 
 Inputs to `call_module` must be `OnnxTensor` instances; pass them in the same order as the model’s inputs. Outputs are returned as an array of `OnnxTensor`.

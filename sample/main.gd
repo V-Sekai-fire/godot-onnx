@@ -8,6 +8,8 @@ var _module: OnnxModule
 
 func _ready() -> void:
 	_module = OnnxModule.new()
+	print("godot-onnx get_execution_providers(): ", _module.get_execution_providers())
+	print("godot-onnx is_accelerated(): ", _module.is_accelerated())
 	# Identity: one input, same shape output
 	_module.load("res://models/identity.onnx")
 	if _module.is_loaded():

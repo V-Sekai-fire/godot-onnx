@@ -29,9 +29,32 @@ impl Default for SessionStore {
     }
 }
 
-/// Build session with platform execution providers: CoreML (macOS), WebGPU (Linux/Windows), NNAPI (Android), CPU fallback.
-fn session_builder() -> ort::Result<SessionBuilder> {
+/// Returns true if this build uses an accelerated execution provider (CoreML or WebGPU), false if CPU-only.
+fn is_accelerated_build() -> bool {
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "windows"))]
+    return true;
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "windows")))]
+    return false;
+}
+
+/// Returns the execution provider name(s) used for inference on this platform (e.g. "CoreML, CPU", "WebGPU, CPU").
+/// Matches the providers configured in session_builder().
+fn execution_providers_name() -> &'static str {
     #[cfg(target_os = "macos")]
+    return "CoreML, CPU";
+    #[cfg(target_os = "ios")]
+    return "CoreML, CPU";
+    #[cfg(target_os = "android")]
+    return "CPU";
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    return "WebGPU, CPU";
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "windows", target_os = "android")))]
+    return "CPU";
+}
+
+/// Build session with platform execution providers: CoreML (macOS/iOS), WebGPU (Linux/Windows), CPU (Android/other).
+fn session_builder() -> ort::Result<SessionBuilder> {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         let coreml_ep: ExecutionProviderDispatch = ep::CoreML::default().into();
         let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
@@ -54,7 +77,7 @@ fn session_builder() -> ort::Result<SessionBuilder> {
             .and_then(|b: SessionBuilder| b.with_execution_providers([webgpu_ep, cpu_ep]))
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows", target_os = "android")))]
+    #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "linux", target_os = "windows", target_os = "android")))]
     {
         let cpu_ep: ExecutionProviderDispatch = ep::CPU::default().into();
         Session::builder()
@@ -119,6 +142,19 @@ impl OnnxModule {
     #[func]
     pub fn is_loaded(&self) -> bool {
         with_mut(&self.session.0, |s| s.is_some())
+    }
+
+    /// Returns the execution provider name(s) used for inference on this build (e.g. "CoreML, CPU", "WebGPU, CPU", "CPU").
+    /// Same for all loaded models; determined by platform (macOS/iOS: CoreML, Linux/Windows: WebGPU, Android/other: CPU).
+    #[func]
+    pub fn get_execution_providers(&self) -> GString {
+        GString::from(execution_providers_name())
+    }
+
+    /// Returns true if this build uses hardware acceleration (CoreML on Apple, WebGPU on Linux/Windows), false if CPU-only (e.g. Android).
+    #[func]
+    pub fn is_accelerated(&self) -> bool {
+        is_accelerated_build()
     }
 
     /// Load model bytes: try ResourceLoader first (imported .onnx from engine cache), then FileAccess.
