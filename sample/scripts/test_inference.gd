@@ -7,7 +7,7 @@
 extends Node
 
 var _failed := false
-var _log: Array[string] = []
+var _log: Array[String] = []
 
 func _ready() -> void:
 	_run_tests()
@@ -38,27 +38,27 @@ func _run_tests() -> void:
 	_test_scene_model("res://models/mediapipe_pose_landmark_full.onnx", PackedInt64Array([1, 256, 256, 3]), "mediapipe_pose_landmark_full")
 
 func _test_identity() -> void:
-	var mod := OnnxModule.new()
+	var mod := ClassDB.instantiate("OnnxModule")
 	mod.load("res://models/identity.onnx")
 	if not mod.is_loaded():
 		_fail("identity.onnx not loaded")
 		return
 	var x := PackedFloat32Array([1.0, 2.0, 3.0])
 	var dim := PackedInt64Array([3])
-	var input_tensor := OnnxTensor.from_float32s(x, dim)
+	var input_tensor := ClassDB.class_call_static("OnnxTensor", "from_float32s", x, dim)
 	var result: Array = mod.call_module("", [input_tensor])
 	if result.is_empty():
 		_fail("identity: no output")
 		return
-	var out: OnnxTensor = result[0] as OnnxTensor
-	var out_data := out.get_data().to_float32_array()
+	var out = result[0]
+	var out_data: PackedFloat32Array = out.get_data().to_float32_array()
 	if out_data.size() != 3 or out_data[0] != 1.0 or out_data[1] != 2.0 or out_data[2] != 3.0:
 		_fail("identity: output mismatch")
 		return
 	_ok("identity")
 
 func _test_matmul() -> void:
-	var mod := OnnxModule.new()
+	var mod := ClassDB.instantiate("OnnxModule")
 	mod.load("res://models/matmul.onnx")
 	if not mod.is_loaded():
 		_fail("matmul.onnx not loaded")
@@ -67,14 +67,14 @@ func _test_matmul() -> void:
 	var b := PackedFloat32Array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
 	var dim_a := PackedInt64Array([2, 3])
 	var dim_b := PackedInt64Array([3, 2])
-	var ta := OnnxTensor.from_float32s(a, dim_a)
-	var tb := OnnxTensor.from_float32s(b, dim_b)
+	var ta := ClassDB.class_call_static("OnnxTensor", "from_float32s", a, dim_a)
+	var tb := ClassDB.class_call_static("OnnxTensor", "from_float32s", b, dim_b)
 	var result: Array = mod.call_module("", [ta, tb])
 	if result.is_empty():
 		_fail("matmul: no output")
 		return
-	var out: OnnxTensor = result[0] as OnnxTensor
-	var out_data := out.get_data().to_float32_array()
+	var out = result[0]
+	var out_data: PackedFloat32Array = out.get_data().to_float32_array()
 	if out_data.size() != 4:
 		_fail("matmul: output size != 4")
 		return
@@ -90,7 +90,7 @@ func _test_scene_model(path: String, dim: PackedInt64Array, name: String) -> voi
 	if not ResourceLoader.exists(path):
 		_skip("%s (file not found)" % name)
 		return
-	var mod := OnnxModule.new()
+	var mod := ClassDB.instantiate("OnnxModule")
 	mod.load(path)
 	if not mod.is_loaded():
 		_skip("%s (load failed)" % name)
@@ -101,7 +101,7 @@ func _test_scene_model(path: String, dim: PackedInt64Array, name: String) -> voi
 	var float_data := PackedFloat32Array()
 	float_data.resize(n)
 	# Leave zeros
-	var input_tensor := OnnxTensor.from_float32s(float_data, dim)
+	var input_tensor := ClassDB.class_call_static("OnnxTensor", "from_float32s", float_data, dim)
 	var result: Array = mod.call_module("", [input_tensor])
 	if result.is_empty():
 		_skip("%s: no output (model may expect different input type)" % name)
