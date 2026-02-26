@@ -161,19 +161,19 @@ jobs:
       - name: Download Windows build
         uses: actions/download-artifact@v4
         with:
-          name: godot-onnx-sample-Windows
+          name: godot-onnx-sample-windows-latest
           path: art-windows
 
       - name: Download Linux build
         uses: actions/download-artifact@v4
         with:
-          name: godot-onnx-sample-Linux
+          name: godot-onnx-sample-ubuntu-latest
           path: art-linux
 
       - name: Download macOS build
         uses: actions/download-artifact@v4
         with:
-          name: godot-onnx-sample-macOS
+          name: godot-onnx-sample-macos-latest
           path: art-macos
 
       - name: Merge into one sample project
